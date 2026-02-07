@@ -1,0 +1,46 @@
+<template>
+  <lightning-card title="New Key Result">
+    <div class="slds-p-around_medium">
+
+      <lightning-combobox
+        data-id="objective"
+        label="Objective"
+        value={objectiveId}
+        options={objectiveOptions}
+        onchange={handleObjectiveChange}
+        required>
+      </lightning-combobox>
+
+      <lightning-input
+        data-id="name"
+        label="Key Result Name"
+        value={name}
+        onchange={handleNameChange}
+        required>
+      </lightning-input>
+
+      <lightning-combobox
+        data-id="metric"
+        label="Metric"
+        value={metric}
+        options={metricOptions}
+        onchange={handleMetricChange}
+        required>
+      </lightning-combobox>
+
+      <lightning-input
+        data-id="target"
+        type="number"
+        label="Target"
+        value={target}
+        onchange={handleTargetChange}
+        required>
+      </lightning-input>
+    </div>
+
+    <footer class="slds-modal__footer">
+      <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+      <lightning-button variant="brand" label="Save" onclick={handleSave}></lightning-button>
+    </footer>
+  </lightning-card>
+</template>

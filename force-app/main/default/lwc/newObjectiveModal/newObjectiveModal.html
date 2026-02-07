@@ -1,0 +1,41 @@
+<template>
+    <lightning-card title="New Objective">
+        <div class="slds-p-around_medium">
+
+            <lightning-input 
+                data-id="name" 
+                label="Objective Name" 
+                value={name} 
+                required>
+            </lightning-input>
+
+            <lightning-textarea 
+                data-id="desc" 
+                label="Description" 
+                value={description}>
+            </lightning-textarea>
+
+            <lightning-combobox 
+                data-id="user" 
+                label="User" 
+                value={selectedUserId} 
+                options={userOptions}
+                required>
+            </lightning-combobox>
+
+            <lightning-combobox
+                data-id="year"
+                label="Year"
+                value={year}
+                options={yearOptions}
+                required>
+            </lightning-combobox>
+        </div>
+
+
+        <footer class="slds-modal__footer">
+            <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+            <lightning-button variant="brand" label="Save" onclick={handleSave}></lightning-button>
+        </footer>
+    </lightning-card>
+</template>

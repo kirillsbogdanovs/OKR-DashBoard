@@ -1,0 +1,23 @@
+<template>
+    <template if:true={keyResultWrapper}>
+        <div class="slds-box slds-m-vertical_small">
+
+            <!-- Targets -->
+            <template if:true={hasTargets}>
+                <template for:each={targets} for:item="t">
+                    <div key={t.objectType} class="slds-text-body_small slds-m-top_xx-small">
+                        <strong>{t.objectType}:</strong> {t.current} / {t.target}
+                    </div>
+                </template>
+            </template>
+
+            <!-- No targets -->
+            <template if:false={hasTargets}>
+                <div class="slds-text-color_weak slds-m-top_xx-small">
+                    No targets configured for this Key Result.
+                </div>
+            </template>
+
+        </div>
+    </template>
+</template>

@@ -1,0 +1,22 @@
+<template>
+    <lightning-card title="Related Records">
+        <template if:true={hasError}>
+            <p class="slds-text-color_error slds-p-around_small">
+                Failed to load related records.
+            </p>
+        </template>
+
+        <template if:true={isLoading}>
+            <lightning-spinner alternative-text="Loading"></lightning-spinner>
+        </template>
+
+        <template if:true={records}>
+            <lightning-datatable
+                key-field="recordId"
+                data={records}
+                columns={columns}
+                onrowaction={handleRowAction}>
+            </lightning-datatable>
+        </template>
+    </lightning-card>
+</template>

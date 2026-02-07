@@ -1,0 +1,56 @@
+import { LightningElement, api } from 'lwc';
+import { deleteRecord } from 'lightning/uiRecordApi';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { refreshApex } from '@salesforce/apex';
+
+const ACTIONS = [
+    { label: 'View', name: 'view' },
+    { label: 'Delete', name: 'delete' }
+];
+
+export default class RelatedRecordsViewer extends LightningElement {
+    @api keyResultId;
+
+    records = [];
+    isLoading = true;
+    hasError = false;
+    wiredRecordsResult;
+
+    columns = [
+        { label: 'Type', fieldName: 'recordType', type: 'text' },
+        { label: 'Name', fieldName: 'name', type: 'text' },
+        { label: 'Date', fieldName: 'recordDate', type: 'date' },
+        { label: 'Status', fieldName: 'status', type: 'text' },
+        {
+            type: 'action',
+            typeAttributes: { rowActions: ACTIONS }
+        }
+    ];
+
+    handleRowAction(event) {
+        const actionName = event.detail.action.name;
+        const row = event.detail.row;
+
+        if (actionName === 'view') {
+            console.log('Viewing record', row.recordId);
+        } else if (actionName === 'delete') {
+            this.deleteRow(row.recordId);
+        }
+    }
+
+    async deleteRow(recordId) {
+        try {
+            await deleteRecord(recordId);
+            this.showToast('Success', 'Record deleted', 'success');
+            if (this.wiredRecordsResult) {
+                await refreshApex(this.wiredRecordsResult);
+            }
+        } catch (error) {
+            this.showToast('Error', error.body?.message || error.message, 'error');
+        }
+    }
+
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+    }
+}

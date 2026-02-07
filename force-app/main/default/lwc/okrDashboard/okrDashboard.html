@@ -1,0 +1,156 @@
+<template>
+  <lightning-card title="OKR Dashboard" icon-name="standard:goals">
+
+    <!-- Header: User + Year -->
+    <div class="slds-p-left_medium slds-p-top_small slds-grid slds-wrap slds-grid_align-spread">
+      <div class="slds-text-body_small">
+        <div>
+          User: <strong>{displayUserName}</strong>
+        </div>
+        <div>
+          Year: <strong>{selectedYear}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="slds-grid slds-grid_align-end slds-gutters slds-p-around_small">
+      <div style="width: 200px;">
+        <lightning-combobox
+          label="Change Year"
+          value={selectedYear}
+          options={yearOptions}
+          onchange={handleYearChange}>
+        </lightning-combobox>
+      </div>
+
+      <div style="width: 200px;">
+        <lightning-combobox
+          label="Select a user"
+          value={selectedUserId}
+          options={userOptions}
+          placeholder="Select a user"
+          onchange={handleUserChange}>
+        </lightning-combobox>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="slds-p-around_medium">
+      <lightning-button-menu
+        alternative-text="OKR Actions"
+        icon-name="utility:add"
+        onselect={handleMenuSelect}>
+        <lightning-menu-item value="newObjective" label="New Objective"></lightning-menu-item>
+        <lightning-menu-item value="newKeyResult" label="New Key Result"></lightning-menu-item>
+        <lightning-menu-item value="newReview" label="New Review"></lightning-menu-item>
+        <lightning-menu-item value="newSurvey" label="New Survey"></lightning-menu-item>
+        <lightning-menu-item value="newCaseStudy" label="New Case Study"></lightning-menu-item>
+        <lightning-menu-item value="newGoogleReview" label="New Google Review"></lightning-menu-item>
+      </lightning-button-menu>
+    </div>
+
+    <!-- Objectives grouped by category -->
+    <div class="slds-p-around_medium">
+      <template if:true={hasObjectives}>
+        <template for:each={groupedObjectives} for:item="group">
+          <div key={group.category} class="slds-m-around_medium">
+            <h2 class="slds-text-heading_small slds-m-bottom_small">
+              {group.category}
+            </h2>
+
+            <div class="slds-grid slds-wrap">
+              <template for:each={group.objectives} for:item="objWrap">
+                <div key={objWrap.objective.Id}
+                     class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-p-around_x-small">
+                  <c-objective-card
+                    objective-wrapper={objWrap}
+                    onselect={handleObjectiveSelect}>
+                  </c-objective-card>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </template>
+
+      <template if:false={hasObjectives}>
+        <p class="slds-text-color_weak">No objectives found for this year/user.</p>
+      </template>
+    </div>
+
+    <!-- New Objective Modal -->
+    <template if:true={showModal}>
+      <c-new-objective-modal
+        user-options={userOptions}
+        selected-user-id={selectedUserId}
+        year={selectedYear}
+        onsave={handleSave}
+        oncancel={handleCancel}>
+      </c-new-objective-modal>
+    </template>
+
+    <!-- New Key Result Modal -->
+    <template if:true={showKeyResultModal}>
+      <c-new-key-result-modal
+        objective-options={objectiveOptions}
+        default-objective-id={keyResultObjectiveId}
+        onsave={handleSaveKeyResult}
+        oncancel={handleCancelKeyResult}>
+      </c-new-key-result-modal>
+    </template>
+
+    <!-- Create Related Record Modal (record-edit-form) -->
+    <template if:true={showCreateModal}>
+      <section role="dialog" tabindex="-1" aria-modal="true" class="slds-modal slds-fade-in-open">
+        <div class="slds-modal__container">
+          <header class="slds-modal__header">
+            <h2 class="slds-text-heading_medium">{createTitle}</h2>
+          </header>
+
+          <div class="slds-modal__content slds-p-around_medium">
+            <lightning-record-edit-form
+              object-api-name={createObjectApi}
+              onsuccess={handleCreateSuccess}
+              onerror={handleCreateError}>
+              <lightning-messages></lightning-messages>
+
+              <template for:each={createFields} for:item="fld">
+                <lightning-input-field key={fld} field-name={fld}></lightning-input-field>
+              </template>
+
+              <lightning-input-field
+                field-name="Key_Result__c"
+                value={selectedKeyResultId}
+                class="slds-hide">
+              </lightning-input-field>
+
+              <div class="slds-m-top_medium slds-text-align_right">
+                <lightning-button 
+                variant="neutral" 
+                label="Cancel" 
+                onclick={closeCreateModal}>
+
+                </lightning-button>
+                <lightning-button variant="brand" type="submit" label="Save" class="slds-m-left_small"></lightning-button>
+              </div>
+            </lightning-record-edit-form>
+          </div>
+        </div>
+      </section>
+
+      <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+
+    <!-- Optional: custom related modal -->
+    <!-- <template if:true={showRelatedModal}>
+      <c-related-record-modal
+        object-api-name={modalObjectApi}
+        key-result-id={selectedKeyResultId}
+        fields={modalFields}
+        onrecordcreated={handleRecordCreated}>
+      </c-related-record-modal>
+    </template> -->
+
+  </lightning-card>
+</template>
