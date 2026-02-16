@@ -206,7 +206,19 @@ export default class OkrDashboard extends LightningElement {
             break;
 
         case 'newKeyResult':
-            this.keyResultObjectiveId = this.selectedObjectiveId;
+            // Make sure we have a valid objective ID
+            if (!this.selectedObjectiveId && this.objectiveOptions && this.objectiveOptions.length > 0) {
+                this.keyResultObjectiveId = this.objectiveOptions[0].value;
+            } else {
+                this.keyResultObjectiveId = this.selectedObjectiveId;
+            }
+
+            if (!this.keyResultObjectiveId) {
+                this.showToast('Warning', 'No Objectives available. Create an Objective first.', 'warning');
+                break;
+            }
+
+            console.log('Opening modal with objectiveId:', this.keyResultObjectiveId);
             this.showKeyResultModal = true;
             break;
 
@@ -375,22 +387,25 @@ export default class OkrDashboard extends LightningElement {
     }
 
     handleSaveKeyResult(event) {
-    saveKeyResult({ kr: event.detail })
-        .then(() => refreshApex(this.wiredObjectives))
-        .then(() => {
-            this.showKeyResultModal = false;
+        // The modal already saved the Key Result successfully
+        // We just need to refresh the data and close the modal
+        
+        console.log('✅ Key Result saved, refreshing data...');
+        
+        this.showKeyResultModal = false;
+        
+        if (this.wiredObjectives) {
+            refreshApex(this.wiredObjectives)
+                .then(() => {
+                    this.showToast('Success', 'Key Result created!', 'success');
+                })
+                .catch(err => {
+                    console.error('Error refreshing objectives:', err);
+                    this.showToast('Warning', 'Key Result created but data refresh failed. Please reload the page.', 'warning');
+                });
+        } else {
             this.showToast('Success', 'Key Result created!', 'success');
-        })
-        .catch(err => {
-            // IMPORTANT: show + log
-            // eslint-disable-next-line no-console
-            console.error('saveKeyResult error:', JSON.stringify(err));
-            this.showToast(
-                'Error',
-                err?.body?.message || err?.message || 'Failed to save Key Result',
-                'error'
-            );
-        });
+        }
     }
 
     // handleSaveObjective(event) {
@@ -411,8 +426,23 @@ export default class OkrDashboard extends LightningElement {
     // }
     
     handleAddKeyResult(event) {
-        this.selectedObjectiveId = event.detail.objectiveId;
-        this.showKeyResultModal = true;
+        // When launched from objectiveCard context, we have a concrete objective id
+
+        // Guard if somehow missing
+        this.showKeyResultModal = false;
+    
+        if (this.wiredObjectives) {
+            refreshApex(this.wiredObjectives)
+                .then(() => {
+                    this.showToast('Success', 'Key Result created!', 'success');
+                })
+                .catch(err => {
+                    console.error('Error refreshing objectives:', err);
+                    this.showToast('Warning', 'Key Result created but data refresh failed. Please reload the page.', 'warning');
+                });
+        } else {
+            this.showToast('Success', 'Key Result created!', 'success');
+        }
     }
     get objectiveOptions() {
     // if you have groupedObjectives = [{ category, objectives: [ { objective: {...}} ] }]

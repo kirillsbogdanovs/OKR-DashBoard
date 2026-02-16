@@ -17,10 +17,6 @@
                                     <lightning-badge label={kr.keyResult.Status__c}></lightning-badge>
                                 </div>
 
-                                <!-- KR metric lines -->
-                                <!-- Removed the objective lines section to prevent duplication -->
-                                <!-- Now only showing individual key result targets via keyResultItem -->
-
                                 <template if:false={kr.targets}>
                                     <div class="slds-text-color_weak slds-text-body_small">
                                         No targets configured for this Key Result.

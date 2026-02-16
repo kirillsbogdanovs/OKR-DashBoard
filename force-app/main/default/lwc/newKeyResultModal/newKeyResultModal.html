@@ -19,24 +19,73 @@
         required>
       </lightning-input>
 
-      <lightning-combobox
-        data-id="metric"
-        label="Metric"
-        value={metric}
-        options={metricOptions}
-        onchange={handleMetricChange}
-        required>
-      </lightning-combobox>
+      <!-- Targets section -->
+            <div class="slds-m-top_medium">
+                <div class="slds-text-title_bold slds-m-bottom_x-small">Targets</div>
 
-      <lightning-input
-        data-id="target"
-        type="number"
-        label="Target"
-        value={target}
-        onchange={handleTargetChange}
-        required>
-      </lightning-input>
-    </div>
+                <template for:each={targetRows} for:item="row">
+                    <div key={row.id} class="slds-grid slds-gutters slds-m-bottom_small slds-wrap">
+
+                        <!-- Object Type -->
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12">
+                            <lightning-combobox
+                                label="Object Type"
+                                value={row.objectType}
+                                options={objectOptions}
+                                data-id={row.id}
+                                onchange={handleObjectTypeChange}
+                                required>
+                            </lightning-combobox>
+                        </div>
+
+                        <!-- SubType only for WebLead
+                        <template if:true={row.isWebLead}>
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12">
+                                <lightning-combobox
+                                    label="Lead Source"
+                                    value={row.subType}
+                                    options={webLeadSubTypeOptions}
+                                    data-id={row.id}
+                                    onchange={handleSubTypeChange}
+                                    required>
+                                </lightning-combobox>
+                            </div>
+                        </template> -->
+
+                        <!-- Target value -->
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
+                            <lightning-input
+                                type="number"
+                                label="Target"
+                                value={row.target}
+                                data-id={row.id}
+                                onchange={handleTargetChange}
+                                required>
+                            </lightning-input>
+                        </div>
+
+                        <!-- Remove row -->
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-12 slds-m-top_large">
+                            <lightning-button-icon
+                                icon-name="utility:delete"
+                                alternative-text="Remove"
+                                title="Remove"
+                                data-id={row.id}
+                                onclick={removeRow}>
+                            </lightning-button-icon>
+                        </div>
+                    </div>
+                </template>
+
+                <lightning-button
+                    class="slds-m-top_small"
+                    label="Add Target"
+                    icon-name="utility:add"
+                    onclick={addRow}>
+                </lightning-button>
+            </div>
+
+        </div>
 
     <footer class="slds-modal__footer">
       <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>

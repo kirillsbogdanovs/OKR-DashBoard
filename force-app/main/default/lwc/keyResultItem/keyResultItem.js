@@ -8,15 +8,21 @@ export default class KeyResultItem extends LightningElement {
   }
 
   get targets() {
-    // support BOTH possible shapes
-    return (
-      this.keyResultWrapper?.targets ??
-      this.keyResultWrapper?.keyResult?.targets ??
-      []
-    );
+    const t = this.keyResultWrapper?.targets ?? [];
+    console.log(' targets for KR', this.kr?.Name, ':', JSON.stringify(t));
+    return t;
   }
 
   get hasTargets() {
-    return this.targets.some(t => (t?.target ?? 0) > 0);
+    const result = this.targets.some(t => (t?.target ?? 0) > 0);
+    console.log(' hasTargets for KR', this.kr?.Name, ':', result);
+    return result;
+  }
+
+  get targetsWithKey() {
+    return (this.targets || []).map((t, idx) => ({
+      ...t,
+      _key: `${t.objectType || 'x'}-${idx}`
+    }));
   }
 }

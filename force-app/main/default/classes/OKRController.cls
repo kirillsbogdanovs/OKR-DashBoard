@@ -139,53 +139,139 @@ public class UserOption {
         return kr;
     }
 
-    // For Saving multiple targets for a Key Result
+    // ==============================
+    // Multiple targets per Key Result
+    // subtype is only for WebLead
+    // ==============================
+
+    private static String norm(String s) {
+        return String.isBlank(s) ? '' : s.trim();
+    }
+
+    private static String makeKey(String objectType) {
+        String ot = norm(objectType);
+
+        // subtype only matters for WebLead
+        if (ot == 'WebLead') {
+                return ot; // allow multiple like WebLead|LinkedIn, WebLead|Web
+            }
+        return norm(objectType); // for other types, just use the object type as key
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<TargetInput> getKeyResultTargets(Id keyResultId) {
+        List<TargetInput> out = new List<TargetInput>();
+
+        for (Key_Result_Target__c t : [
+            SELECT Object_Type__c, Target__c
+            FROM Key_Result_Target__c
+            WHERE Key_Result__c = :keyResultId
+            ORDER BY Object_Type__c
+        ]) {
+            TargetInput ti = new TargetInput();
+            ti.objectType = t.Object_Type__c;
+            ti.target = (t.Target__c == null ? 0 : Integer.valueOf(t.Target__c));
+            out.add(ti);
+        }
+        return out;
+    }
+
+    @AuraEnabled
+    public static void saveKeyResultTargets(Id keyResultId, List<TargetInput> targets) {
+    System.debug('🔧 saveKeyResultTargets called');
+    System.debug('🔧 keyResultId: ' + keyResultId);
+    System.debug('🔧 targets: ' + JSON.serialize(targets));
     
-    // public class TargetInput {
-    //      @AuraEnabled public String objectType;   
-    //      @AuraEnabled public Integer target;      
-    //      @AuraEnabled public String subType;      
-    // }
+    if (keyResultId == null) {
+        System.debug('❌ keyResultId is null');
+        throw new AuraHandledException('keyResultId is required');
+    }
+    if (targets == null || targets.isEmpty()) {
+        System.debug('❌ targets is null or empty');
+        throw new AuraHandledException('targets list is required');
+    }
 
-    // @AuraEnabled
-    // public static Key_Result__c saveKeyResultTargets(Id keyResultId, List<TargetInput> targets) {
-    //     if (keyResultId == null) throw new AuraHandledException('keyResultId is required');
-    //     if (targets == null || targets.isEmpty()) throw new AuraHandledException('targets list is required');
+    // dedupe by objectType
+    Map<String, TargetInput> incomingTarget = new Map<String, TargetInput>();
+    for (TargetInput ti : targets) {
+        if (ti == null) continue;
 
+        String ot = norm(ti.objectType);
+        if (String.isBlank(ot)) continue;
+        if (ti.target == null) continue;
 
-    //     Key_Result__c kr = [
-    //         SELECT Id, Name, Metric__c, Target_Value__c
-    //         FROM Key_Result__c
-    //         WHERE Id = :keyResultId
-    //     ];
-
-    //     //Load existing targets
-    //     Map<String, Key_Result_Target__c> existingTargets = new Map<String, Key_Result_Target__c>();
-    //     for (Key_Result_Target__c t : [
-    //         SELECT Id, Key_Result__c, Object_Type__c, Target__c
-    //         FROM Key_Result_Target__c
-    //         WHERE Key_Result__c = :keyResultId
-    //     ]) {
-    //         existingTargets.put(t.Object_Type__c, t);
-    //     }
+        TargetInput clean = new TargetInput();
+        clean.objectType = ot;
+        clean.target = ti.target;
+        incomingTarget.put(ot, clean);
         
-    //     // Upsert targets
-    //     for (TargetInput ti : targets) {
-    //         if (String.isBlank(ti.objectType) || ti.target == null) continue;
-    //         if (existingTargets.containsKey(ti.objectType)) {
-    //             Key_Result_Target__c et = existingTargets.get(ti.objectType);
-    //             et.Target__c = ti.target;
-    //             update et;
-    //         } else {
-    //             Key_Result_Target__c newTgt = new Key_Result_Target__c(
-    //                 Key_Result__c = keyResultId,
-    //                 Object_Type__c = ti.objectType,
-    //                 Target__c = ti.target
-    //             );
-    //             insert newTgt;
-    //         }
-    //     }
-    // }
+        System.debug('🔧 Added to incomingTarget: ' + ot + ' = ' + ti.target);
+    }
+
+    System.debug('🔧 incomingTarget size: ' + incomingTarget.size());
+
+    // 2) Load existing targets
+    Map<String, Key_Result_Target__c> existingTargets = new Map<String, Key_Result_Target__c>();
+    for (Key_Result_Target__c t : [
+        SELECT Id, Key_Result__c, Object_Type__c, Target__c
+        FROM Key_Result_Target__c
+        WHERE Key_Result__c = :keyResultId
+    ]) {
+        existingTargets.put(norm(t.Object_Type__c), t);
+        System.debug('🔧 Found existing target: ' + t.Object_Type__c + ' = ' + t.Target__c);
+    }
+    
+    System.debug('🔧 existingTargets size: ' + existingTargets.size());
+    
+    // 3) Upsert targets
+    List<Key_Result_Target__c> toUpsert = new List<Key_Result_Target__c>();
+
+    for (String key : incomingTarget.keySet()) {
+        TargetInput t = incomingTarget.get(key);
+
+        if (existingTargets.containsKey(key)) {
+            Key_Result_Target__c e = existingTargets.get(key);
+            e.Target__c = t.target;
+            toUpsert.add(e);
+            System.debug('🔧 Updating existing: ' + key + ' to ' + t.target);
+        } else {
+            Key_Result_Target__c newTarget = new Key_Result_Target__c(
+                Key_Result__c = keyResultId,
+                Object_Type__c = t.objectType,
+                Target__c = t.target
+            );
+            toUpsert.add(newTarget);
+            System.debug('🔧 Creating new: ' + t.objectType + ' = ' + t.target);
+        }
+    }
+    
+    System.debug('🔧 toUpsert size: ' + toUpsert.size());
+    System.debug('🔧 toUpsert records: ' + JSON.serialize(toUpsert));
+    
+    if (!toUpsert.isEmpty()) {
+        try {
+            Database.UpsertResult[] results = Database.upsert(toUpsert, AccessLevel.USER_MODE);
+            
+            for (Integer i = 0; i < results.size(); i++) {
+                Database.UpsertResult result = results[i];
+                if (result.isSuccess()) {
+                    System.debug('✅ Successfully upserted: ' + result.getId());
+                } else {
+                    for (Database.Error err : result.getErrors()) {
+                        System.debug('❌ Upsert error: ' + err.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.debug('❌ Exception during upsert: ' + e.getMessage());
+            throw new AuraHandledException('Failed to save targets: ' + e.getMessage());
+        }
+    } else {
+        System.debug('⚠️ toUpsert is empty - nothing to save!');
+    }
+    
+    System.debug('🔧 saveKeyResultTargets completed');
+}
 
     // Get counts of related records for a Key Result
     @AuraEnabled(cacheable=true)
@@ -322,6 +408,17 @@ public class UserOption {
     Set<Id> objIds = new Set<Id>();
     for (Objective__c o : objectives) objIds.add(o.Id);
 
+    // existing overall WebLead line
+
+    // if (w.webLeadTarget > 0) {
+    //     w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, w.webLeadTarget));
+    // } else if (w.webLeadCount > 0) {
+    //     // still show current even if no target set
+    //     w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, 0));
+    // }
+
+    // end WebLead special handling
+
     // 2) Key Results -> wrappers
     Map<Id, List<KeyResultWrapper>> krMap = new Map<Id, List<KeyResultWrapper>>();
     Map<Id, KeyResultWrapper> krWrapById = new Map<Id, KeyResultWrapper>();
@@ -346,6 +443,33 @@ public class UserOption {
 
     // 3) Count related records per KR using your junction object
     if (!krIds.isEmpty()) {
+    
+    // 3a) Progress rows
+    List<Key_Result_Event_Link__c> allLinks = [
+        SELECT Key_Result__c, Object_Type__c, RecordId__c
+        FROM Key_Result_Event_Link__c
+        WHERE Key_Result__c IN :krIds
+    ];
+    
+    Set<Id> leadIds = new Set<Id>();
+        for (Key_Result_Event_Link__c link : allLinks) {
+            if (link.Object_Type__c == 'WebLead' && !String.isBlank(link.RecordId__c)) {
+                leadIds.add((Id)link.RecordId__c);
+            }
+        }
+    
+    Map<Id, String> leadSourceById = new Map<Id, String>();
+        if (!leadIds.isEmpty()) {
+            for (Lead ld : [
+                SELECT Id, LeadSource
+                FROM Lead
+                WHERE Id IN :leadIds
+            ]) {
+                leadSourceById.put(ld.Id, ld.LeadSource);
+            }
+        }
+
+    Map<Id, Map<String, Integer>> webLeadCountsByKr = new Map<Id, Map<String, Integer>>();
 
     // Canonical keys and friendly labels
     Map<String, String> labelByCanonical = new Map<String, String>{
@@ -359,13 +483,6 @@ public class UserOption {
         'CaseStudy'     => 'CaseStudies'
     };
 
-    // 3a) Progress rows
-    List<Key_Result_Event_Link__c> allLinks = [
-        SELECT Key_Result__c, Object_Type__c, RecordId__c
-        FROM Key_Result_Event_Link__c
-        WHERE Key_Result__c IN :krIds
-    ];
-
     for (Key_Result_Event_Link__c link : allLinks) {
         KeyResultWrapper w = krWrapById.get(link.Key_Result__c);
         if (w == null ) continue;
@@ -374,10 +491,25 @@ public class UserOption {
         if (String.isBlank(canon)) continue;
 
         if (!String.isBlank(link.RecordId__c)) {
+
+            if (canon == 'WebLead') {
+            w.webLeadCount++;
+
+            String src = leadSourceById.get((Id)link.RecordId__c);
+            if (String.isBlank(src)) src = 'Unknown';
+
+            if (!webLeadCountsByKr.containsKey(link.Key_Result__c)) {
+                webLeadCountsByKr.put(link.Key_Result__c, new Map<String, Integer>());
+            }
+            Map<String, Integer> bySrc = webLeadCountsByKr.get(link.Key_Result__c);
+            bySrc.put(src, (bySrc.containsKey(src) ? bySrc.get(src) : 0) + 1);
+
+            continue; // IMPORTANT so it doesn't fall through other counters
+        }
+
             if (canon == 'Opportunity')      w.opportunityCount++;
             else if (canon == 'Call')        w.callCount++;
             else if (canon == 'Contract')    w.contractCount++;
-            else if (canon == 'WebLead')     w.webLeadCount++;
             else if (canon == 'Survey')      w.surveyCount++;
             else if (canon == 'Review')      w.reviewCount++;
             else if (canon == 'GoogleReview')w.googleReviewCount++;
@@ -386,49 +518,116 @@ public class UserOption {
     }
 
     // 3b) Targets from Key_Result_Target__c
-    for (Key_Result_Target__c tr : [
-        SELECT Key_Result__c, Object_Type__c, Target__c
-        FROM Key_Result_Target__c
-        WHERE Key_Result__c IN :krIds
-    ]) {
-        KeyResultWrapper w = krWrapById.get(tr.Key_Result__c);
-        if (w == null) continue;
+    System.debug('🔍 Loading targets from Key_Result_Target__c...');
 
-        String canon = tr.Object_Type__c; // canonical labels in org
-        Integer targetVal = (tr.Target__c == null) ? 0 : Integer.valueOf(tr.Target__c);
-
-        if (canon == 'Opportunity')         w.opportunityTarget = targetVal;
-        else if (canon == 'Call')           w.callTarget = targetVal;
-        else if (canon == 'Contract')       w.contractTarget = targetVal;
-        else if (canon == 'WebLead')        w.webLeadTarget = targetVal;
-        else if (canon == 'Survey')         w.surveyTarget = targetVal;
-        else if (canon == 'Review')         w.reviewTarget = targetVal;
-        else if (canon == 'GoogleReview')   w.googleReviewTarget = targetVal;
-        else if (canon == 'CaseStudy')      w.caseStudyTarget = targetVal;
+for (Key_Result_Target__c tr : [
+    SELECT Key_Result__c, Object_Type__c, Target__c
+    FROM Key_Result_Target__c
+    WHERE Key_Result__c IN :krIds
+]) {
+    System.debug('🔍 Found target record: KR=' + tr.Key_Result__c + ', Object_Type__c=' + tr.Object_Type__c + ', Target=' + tr.Target__c);
+    
+    KeyResultWrapper w = krWrapById.get(tr.Key_Result__c);
+    if (w == null) {
+        System.debug('⚠️ Wrapper not found for KR: ' + tr.Key_Result__c);
+        continue;
     }
+
+    String canon = tr.Object_Type__c;
+    Integer targetVal = (tr.Target__c == null) ? 0 : Integer.valueOf(tr.Target__c);
+
+    System.debug('🔍 Processing: canon=' + canon + ', targetVal=' + targetVal);
+
+    if (canon == 'Opportunity') {
+        w.opportunityTarget = targetVal;
+        System.debug('✅ Set opportunityTarget = ' + targetVal);
+    }
+    else if (canon == 'Call') {
+        w.callTarget = targetVal;
+        System.debug('✅ Set callTarget = ' + targetVal);
+    }
+    else if (canon == 'Contract') {
+        w.contractTarget = targetVal;
+        System.debug('✅ Set contractTarget = ' + targetVal);
+    }
+    else if (canon == 'WebLead') {
+        w.webLeadTarget = targetVal;
+        System.debug('✅ Set webLeadTarget = ' + targetVal);
+    }
+    else if (canon == 'Survey') {
+        w.surveyTarget = targetVal;
+        System.debug('✅ Set surveyTarget = ' + targetVal);
+    }
+    else if (canon == 'Review') {
+        w.reviewTarget = targetVal;
+        System.debug('✅ Set reviewTarget = ' + targetVal);
+    }
+    else if (canon == 'GoogleReview') {
+        w.googleReviewTarget = targetVal;
+        System.debug('✅ Set googleReviewTarget = ' + targetVal);
+    }
+    else if (canon == 'CaseStudy') {
+        w.caseStudyTarget = targetVal;
+        System.debug('✅ Set caseStudyTarget = ' + targetVal);
+    }
+    else {
+        System.debug('❌ UNKNOWN Object_Type__c: ' + canon);
+    }
+}
+
+System.debug('🔍 Finished loading targets');
 
     // 3c) Build KR targets list for UI from canonical keys
     for (Id krId : krWrapById.keySet()) {
         KeyResultWrapper w = krWrapById.get(krId);
         if (w.targets == null) w.targets = new List<KeyResultTargetWrapper>();
 
-        if (w.opportunityTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('Opportunity'), w.opportunityCount, w.opportunityTarget));
-        if (w.callTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('Call'), w.callCount, w.callTarget));
-        if (w.contractTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('Contract'), w.contractCount, w.contractTarget));
-        if (w.webLeadTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('WebLead'), w.webLeadCount, w.webLeadTarget));
-        if (w.surveyTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('Survey'), w.surveyCount, w.surveyTarget));
-        if (w.reviewTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('Review'), w.reviewCount, w.reviewTarget));
-        if (w.googleReviewTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('GoogleReview'), w.googleReviewCount, w.googleReviewTarget));
-        if (w.caseStudyTarget > 0)
-            w.targets.add(new KeyResultTargetWrapper(labelByCanonical.get('CaseStudy'), w.caseStudyCount, w.caseStudyTarget));
+        if (w.opportunityTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('Opportunities', w.opportunityCount, w.opportunityTarget));
+        System.debug('  Added Opportunities: ' + w.opportunityCount + '/' + w.opportunityTarget);
     }
+    if (w.callTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('Calls', w.callCount, w.callTarget));
+        System.debug('  Added Calls: ' + w.callCount + '/' + w.callTarget);
+    }
+    if (w.contractTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('Contracts', w.contractCount, w.contractTarget));
+        System.debug('  Added Contracts: ' + w.contractCount + '/' + w.contractTarget);
+    }
+    if (w.surveyTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('Surveys', w.surveyCount, w.surveyTarget));
+        System.debug('  Added Surveys: ' + w.surveyCount + '/' + w.surveyTarget);
+    }
+    if (w.reviewTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('Reviews', w.reviewCount, w.reviewTarget));
+        System.debug('  Added Reviews: ' + w.reviewCount + '/' + w.reviewTarget);
+    }
+    if (w.googleReviewTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('GoogleReviews', w.googleReviewCount, w.googleReviewTarget));
+        System.debug('  Added GoogleReviews: ' + w.googleReviewCount + '/' + w.googleReviewTarget);
+    }
+    if (w.caseStudyTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('CaseStudies', w.caseStudyCount, w.caseStudyTarget));
+        System.debug('  Added CaseStudies: ' + w.caseStudyCount + '/' + w.caseStudyTarget);
+    }
+    if (w.webLeadTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, w.webLeadTarget));
+        System.debug('  Added WebLeads: ' + w.webLeadCount + '/' + w.webLeadTarget);
+    } else if (w.webLeadCount > 0) {
+        // Show current even if no target set
+        w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, 0));
+        System.debug('  Added WebLeads (no target): ' + w.webLeadCount + '/0');
+    }
+
+        // Breakdown lines (current only, auto from LeadSource)
+        Map<String, Integer> bySrc = webLeadCountsByKr.get(krId);
+        if (bySrc != null) {
+            for (String src : bySrc.keySet()) {
+                w.targets.add(new KeyResultTargetWrapper(src + ' Leads', bySrc.get(src), 0));
+            }
+        }
+    }
+
 
     // 3d) Compute completion based on KR.Metric__c mapped to canonical key
     Map<String, String> uiMetricToCanon = new Map<String, String>{
@@ -609,13 +808,22 @@ public class UserOption {
             @AuraEnabled public String objectType;
             @AuraEnabled public Integer target;
             @AuraEnabled public Integer current;
+            @AuraEnabled public String rowKey;
 
             public KeyResultTargetWrapper(String objectType, Integer current, Integer target) {
                 this.objectType = objectType;
-                this.target = target;
                 this.current = current;
+                this.target = target;
             }
         }
+
+        public class TargetInput {
+            @AuraEnabled public String objectType;   // e.g. 'Opportunity', 'WebLead'
+            @AuraEnabled public Integer target;      // e.g. 50    
+            // only for WebLead, e.g. 'LinkedIn'
+        }
+
+
 
         // Wrapper for Related Record
     // public class RelatedRecordWrapper {
