@@ -176,101 +176,57 @@ public class UserOption {
         return out;
     }
 
-    @AuraEnabled
-    public static void saveKeyResultTargets(Id keyResultId, List<TargetInput> targets) {
-    System.debug('🔧 saveKeyResultTargets called');
+@AuraEnabled
+public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
+    System.debug('🔧 saveKeyResultTargets CALLED');
     System.debug('🔧 keyResultId: ' + keyResultId);
-    System.debug('🔧 targets: ' + JSON.serialize(targets));
+    System.debug('🔧 targetsJson: ' + targetsJson);
     
     if (keyResultId == null) {
-        System.debug('❌ keyResultId is null');
         throw new AuraHandledException('keyResultId is required');
     }
-    if (targets == null || targets.isEmpty()) {
-        System.debug('❌ targets is null or empty');
-        throw new AuraHandledException('targets list is required');
+    if (String.isBlank(targetsJson)) {
+        throw new AuraHandledException('targetsJson is required');
     }
 
-    // dedupe by objectType
-    Map<String, TargetInput> incomingTarget = new Map<String, TargetInput>();
-    for (TargetInput ti : targets) {
-        if (ti == null) continue;
-
-        String ot = norm(ti.objectType);
-        if (String.isBlank(ot)) continue;
-        if (ti.target == null) continue;
-
-        TargetInput clean = new TargetInput();
-        clean.objectType = ot;
-        clean.target = ti.target;
-        incomingTarget.put(ot, clean);
-        
-        System.debug('🔧 Added to incomingTarget: ' + ot + ' = ' + ti.target);
-    }
-
-    System.debug('🔧 incomingTarget size: ' + incomingTarget.size());
-
-    // 2) Load existing targets
-    Map<String, Key_Result_Target__c> existingTargets = new Map<String, Key_Result_Target__c>();
-    for (Key_Result_Target__c t : [
-        SELECT Id, Key_Result__c, Object_Type__c, Target__c
-        FROM Key_Result_Target__c
+    // Delete existing targets first
+    List<Key_Result_Target__c> existing = [
+        SELECT Id FROM Key_Result_Target__c 
         WHERE Key_Result__c = :keyResultId
-    ]) {
-        existingTargets.put(norm(t.Object_Type__c), t);
-        System.debug('🔧 Found existing target: ' + t.Object_Type__c + ' = ' + t.Target__c);
+    ];
+    if (!existing.isEmpty()) {
+        delete existing;
+        System.debug('🔧 Deleted ' + existing.size() + ' existing targets');
     }
-    
-    System.debug('🔧 existingTargets size: ' + existingTargets.size());
-    
-    // 3) Upsert targets
-    List<Key_Result_Target__c> toUpsert = new List<Key_Result_Target__c>();
 
-    for (String key : incomingTarget.keySet()) {
-        TargetInput t = incomingTarget.get(key);
+    // Parse JSON
+    List<Object> parsed = (List<Object>) JSON.deserializeUntyped(targetsJson);
+    System.debug('🔧 Parsed ' + parsed.size() + ' targets');
+    
+    List<Key_Result_Target__c> toInsert = new List<Key_Result_Target__c>();
+    
+    for (Object item : parsed) {
+        Map<String, Object> row = (Map<String, Object>) item;
+        String objectType = (String) row.get('objectType');
+        Integer targetVal = ((Decimal) row.get('target')).intValue();
+        
+        System.debug('🔧 Adding: ' + objectType + ' = ' + targetVal);
+        
+        if (String.isBlank(objectType) || targetVal == null) continue;
+        
+        toInsert.add(new Key_Result_Target__c(
+            Key_Result__c = keyResultId,
+            Object_Type__c = objectType,
+            Target__c = targetVal
+        ));
+    }
 
-        if (existingTargets.containsKey(key)) {
-            Key_Result_Target__c e = existingTargets.get(key);
-            e.Target__c = t.target;
-            toUpsert.add(e);
-            System.debug('🔧 Updating existing: ' + key + ' to ' + t.target);
-        } else {
-            Key_Result_Target__c newTarget = new Key_Result_Target__c(
-                Key_Result__c = keyResultId,
-                Object_Type__c = t.objectType,
-                Target__c = t.target
-            );
-            toUpsert.add(newTarget);
-            System.debug('🔧 Creating new: ' + t.objectType + ' = ' + t.target);
-        }
+    System.debug('🔧 Inserting ' + toInsert.size() + ' targets');
+    
+    if (!toInsert.isEmpty()) {
+        insert toInsert;
+        System.debug('✅ Successfully inserted ' + toInsert.size() + ' targets');
     }
-    
-    System.debug('🔧 toUpsert size: ' + toUpsert.size());
-    System.debug('🔧 toUpsert records: ' + JSON.serialize(toUpsert));
-    
-    if (!toUpsert.isEmpty()) {
-        try {
-            Database.UpsertResult[] results = Database.upsert(toUpsert, AccessLevel.USER_MODE);
-            
-            for (Integer i = 0; i < results.size(); i++) {
-                Database.UpsertResult result = results[i];
-                if (result.isSuccess()) {
-                    System.debug('✅ Successfully upserted: ' + result.getId());
-                } else {
-                    for (Database.Error err : result.getErrors()) {
-                        System.debug('❌ Upsert error: ' + err.getMessage());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            System.debug('❌ Exception during upsert: ' + e.getMessage());
-            throw new AuraHandledException('Failed to save targets: ' + e.getMessage());
-        }
-    } else {
-        System.debug('⚠️ toUpsert is empty - nothing to save!');
-    }
-    
-    System.debug('🔧 saveKeyResultTargets completed');
 }
 
     // Get counts of related records for a Key Result
