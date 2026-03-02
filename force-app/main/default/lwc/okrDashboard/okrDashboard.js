@@ -6,7 +6,8 @@ import saveObjective from '@salesforce/apex/OKRController.saveObjective';
 import USER_ID from '@salesforce/user/Id';
 import createRelatedRecord from '@salesforce/apex/OKRController.createRelatedRecord';
 import getActiveUsers from '@salesforce/apex/OKRController.getActiveUsers';
-import saveKeyResult from '@salesforce/apex/OKRController.saveKeyResult'; // ✅ import current user ID
+import saveKeyResult from '@salesforce/apex/OKRController.saveKeyResult';
+import createEventLink from '@salesforce/apex/OKRController.createEventLink'; // ✅ import current user ID
 
 export default class OkrDashboard extends LightningElement {
     userId = USER_ID;
@@ -28,7 +29,6 @@ export default class OkrDashboard extends LightningElement {
     @track selectedUserName = '';
     @track showModal = false;
     wiredObjectives;
-
 
     // Year options for combobox
     get yearOptions() {
@@ -97,17 +97,6 @@ export default class OkrDashboard extends LightningElement {
     return Object.values(grouped);
 }
 
-    // Options for objective selection combobox
-    //get objectiveOptions() {
-    //if (!this.objectivesWithKeyResults || this.objectivesWithKeyResults.length === 0) {
-     //   return [];
-    //}
-    //return this.objectivesWithKeyResults.map(wrapper => ({
-    //    label: wrapper.objective.Name,
-    //    value: wrapper.objective.Id
-    //}));
-//}
-
      // 📆 Handle year change
     handleYearChange(event) {
         this.selectedYear = event.detail.value;
@@ -119,26 +108,6 @@ export default class OkrDashboard extends LightningElement {
     handleUserChange(event) {
         this.selectedUserId = event.detail.value;
     }
-
-    // ➕ Handle new objective creation
-    // async handleNewObjective() {
-        //const result = await NewObjectiveModal.open({
-            //size: 'medium',
-            //description: 'Create a new objective',
-           // isEdit: false
-        //});
-
-        //if (result && result.success) {
-            //saveObjective({ obj: result.fields })
-                //.then(() => {
-                   // this.showToast('Success', 'Objective created!', 'success');
-                  //  return refreshApex(this.wiredObjectives);
-               // })
-                //.catch(error => {
-               //     this.showToast('Error', error.body.message, 'error');
-              //  });
-       // }
-   // }
 
     handleNewObjective() {
         // Just open the child modal component
@@ -407,23 +376,6 @@ export default class OkrDashboard extends LightningElement {
             this.showToast('Success', 'Key Result created!', 'success');
         }
     }
-
-    // handleSaveObjective(event) {
-    // const fields = { ...event.detail };
-
-    // // If you want OwnerId = assigned user too:
-    // fields.OwnerId = fields.User__c;
-
-    // saveObjective({ obj: fields })
-    //     .then(() => refreshApex(this.wiredObjectives))
-    //     .then(() => {
-    //         this.showModal = false;
-    //         this.showToast('Success', 'Objective created!', 'success');
-    //     })
-    //     .catch(err => {
-    //         this.showToast('Error', err.body?.message || err.message, 'error');
-    //     });
-    // }
     
     handleAddKeyResult(event) {
         // When launched from objectiveCard context, we have a concrete objective id
@@ -457,6 +409,56 @@ export default class OkrDashboard extends LightningElement {
     });
 
     return opts;
+    }
+
+    get keyResultOptions() {
+        const options = [];
+        if (this.objectivesWithKeyResults) {
+            this.objectivesWithKeyResults.forEach(w =>{
+                    (w?.keyResults?? []).forEach(kr => {
+                        options.push({
+                            label: kr?.keyResult?.Name,
+                            value: kr?.keyResult?.Id
+                        });
+                    });
+            });
+        }
+        return options;
+    }
+
+    handleKeyResultChange(e){
+        this.selectedKeyResultId = e.detail.value;
+    }
+
+    handleCreateSuccess(event){
+        const recordId = event.detail.id;
+        const objectTypeMap = {
+            'Survey__c': 'Survey',
+            'Review__c': 'Review',
+            'Case_Study__c': 'CaseStudy',
+            'Google_Review__c': 'GoogleReview'
+        };
+        const objectType = objectTypeMap[this.createObjectApi];
+
+        createEventLink({
+            keyResultId: this.selectedKeyResultId,
+            recordId: recordId,
+            objectType: objectType
+         })
+        .then(() => {
+            this.showToast('Success', `${this.createTitle} created!`, 'success');
+            this.showCreateModal = false;
+            if (this.wiredObjectives) {
+                refreshApex(this.wiredObjectives).then(() => {
+                    console.log('Data refreshed');
+                    console.log('Current data:', JSON.stringify(this.objectivesWithKeyResults));
+                });
+            }
+        })
+        .catch(err => {
+            console.log('Full error:', JSON.stringify(err));
+            this.showToast('Error', err.body?.message || 'Error creating link', 'error');
+        });
     }
 
     handleCancel() {

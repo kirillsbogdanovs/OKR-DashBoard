@@ -1,3 +1,62 @@
-:host {
+.page {
+  background: #f6f6f6;
+  padding: 16px 18px;
+  min-height: 100%;
+}
+
+.header{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.headerLeft {
+  font-size: 12px;
+  color: #333;
+  line-height: 1.2;
+}
+
+.headerRight {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.controlLabel {
+  font-size: 11px;
+  color: #666;
+}
+
+.sectionTitle {
+  width: 220px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #1f1f1f;
+  padding-top: 6px;
+}
+
+.sectionContent {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.dashboardHeader {
+  margin-bottom: 8px;
+}
+
+.dashboardFilters {
+  padding-top: 0;
+  margin-top: -6px;
+}
+
+.filterItem lightning-combobox {
   display: block;
 }

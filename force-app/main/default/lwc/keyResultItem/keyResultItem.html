@@ -1,13 +1,16 @@
 <template>
-    <template if:true={keyResultWrapper}>
-        <div class="slds-box slds-m-vertical_small">
+    <div class="key-result-card">
+        <div class="key-result-name">{kr.Name}</div>
+        <div class="kr-status">
+            <lightning-badge label={kr.Status__c}></lightning-badge>
+        </div>
 
             <!-- Targets -->
             <template if:true={hasTargets}>
-                <ul class="slds-list_dotted slds-m-left_medium">
+                <ul class="targets-list">
                 <template for:each={targetsWithKey} for:item="t">
-                    <li key={t._key} class="slds-m-vertical_xx-small">
-                    <span class="slds-text-body_small">
+                    <li key={t._key} class="target-item">
+                    <span class="target-count">
                         <strong>{t.objectType}:</strong> {t.current} / {t.target}
                     </span>
                     </li>
@@ -17,11 +20,10 @@
 
             <!-- No targets -->
             <template if:false={hasTargets}>
-                <div class="slds-text-color_weak slds-m-top_xx-small">
+                <div class="no-targets">
                     No targets configured for this Key Result.
                 </div>
             </template>
 
         </div>
-    </template>
 </template>

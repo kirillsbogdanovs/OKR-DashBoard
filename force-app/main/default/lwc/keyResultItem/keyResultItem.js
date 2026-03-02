@@ -9,13 +9,11 @@ export default class KeyResultItem extends LightningElement {
 
   get targets() {
     const t = this.keyResultWrapper?.targets ?? [];
-    console.log(' targets for KR', this.kr?.Name, ':', JSON.stringify(t));
     return t;
   }
 
   get hasTargets() {
     const result = this.targets.some(t => (t?.target ?? 0) > 0);
-    console.log(' hasTargets for KR', this.kr?.Name, ':', result);
     return result;
   }
 

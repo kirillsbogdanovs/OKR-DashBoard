@@ -57,10 +57,6 @@ export default class ObjectiveCard extends LightningElement {
         return this.objectiveWrapper?.KeyResultCompletedCount || 0;
     }
 
-    get objectiveCompletionPercent() {
-        return this.objectiveWrapper?.ObjectiveCompletionPercent || 0;
-    }
-
     get hasLines() {
         return (this.objectiveWrapper?.lines || []).length > 0;
     }

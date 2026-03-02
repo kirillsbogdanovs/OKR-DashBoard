@@ -1,38 +1,28 @@
 <template>
-    <lightning-card class="slds-m-bottom_medium">
-        <h3 slot="title" class="slds-grid slds-grid_align-spread" onclick={handleSelect}>
-            <span>{objective.Name}</span>
-            <lightning-badge label={objective.Status__c}></lightning-badge>
-        </h3>
+    <div class="objective-card">
+        <!-- Header with title and status badge -->
+        <div class="objective-header">
+            <h3 class="objective-title" onclick={handleSelect}>{objective.Name}</h3>
+        </div>
 
-        <div class="slds-grid slds-gutters slds-wrap">
-            <div class="slds-col slds-size_1-of-1 slds-medium-size_7-of-12">
-                <div class="slds-grid slds-wrap slds-gutters_small">
+        <!-- Key Results section -->
+        <div class="key-results-section">
+            <h4 class="section-heading">Key Results</h4>
+            
+            <template if:true={keyResults.length}>
+                <div class="key-results-grid">
                     <template for:each={keyResults} for:item="kr">
-                        <div key={kr.keyResult.Id} class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
-                            <section class="slds-box slds-box_small slds-theme_default">
-                                <!-- KR header -->
-                                <div class="slds-grid slds-grid_align-spread slds-m-bottom_small">
-                                    <div class="slds-text-title_bold">{kr.keyResult.Name}</div>
-                                    <lightning-badge label={kr.keyResult.Status__c}></lightning-badge>
-                                </div>
-
-                                <template if:false={kr.targets}>
-                                    <div class="slds-text-color_weak slds-text-body_small">
-                                        No targets configured for this Key Result.
-                                    </div>
-                                </template>
-
-                                <!-- Render the key result item directly using the kr object -->
-                                <c-key-result-item
-                                    key={kr.keyResult.Id}
-                                    key-result-wrapper={kr}>
-                                </c-key-result-item>
-                            </section>
-                        </div>
+                        <c-key-result-item
+                            key={kr.keyResult.Id}
+                            key-result-wrapper={kr}>
+                        </c-key-result-item>
                     </template>
                 </div>
-            </div>
+            </template>
+
+            <template if:false={keyResults.length}>
+                <div class="empty-state">No key results yet</div>
+            </template>
         </div>
-    </lightning-card>
+    </div>
 </template>

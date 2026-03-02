@@ -15,7 +15,7 @@
 
     <!-- Filters -->
     <div class="slds-grid slds-grid_align-end slds-gutters slds-p-around_small">
-      <div style="width: 200px;">
+      <div class="filterItem" style="width: 200px;">
         <lightning-combobox
           label="Change Year"
           value={selectedYear}
@@ -24,7 +24,7 @@
         </lightning-combobox>
       </div>
 
-      <div style="width: 200px;">
+      <div class="filterItem" style="width: 200px;">
         <lightning-combobox
           label="Select a user"
           value={selectedUserId}
@@ -55,7 +55,7 @@
       <template if:true={hasObjectives}>
         <template for:each={groupedObjectives} for:item="group">
           <div key={group.category} class="slds-m-around_medium">
-            <h2 class="slds-text-heading_small slds-m-bottom_small">
+            <h2 class="categoryTitle slds-text-heading_small slds-m-bottom_small">
               {group.category}
             </h2>
 
@@ -120,6 +120,14 @@
                 <lightning-input-field key={fld} field-name={fld}></lightning-input-field>
               </template>
 
+              <lightning-combobox
+                label="Key Result"
+                value={selectedKeyResultId}
+                options={keyResultOptions}
+                onchange={handleKeyResultChange}
+                required>
+              </lightning-combobox>
+
               <lightning-input-field
                 field-name="Key_Result__c"
                 value={selectedKeyResultId}
@@ -142,16 +150,6 @@
 
       <div class="slds-backdrop slds-backdrop_open"></div>
     </template>
-
-    <!-- Optional: custom related modal -->
-    <!-- <template if:true={showRelatedModal}>
-      <c-related-record-modal
-        object-api-name={modalObjectApi}
-        key-result-id={selectedKeyResultId}
-        fields={modalFields}
-        onrecordcreated={handleRecordCreated}>
-      </c-related-record-modal>
-    </template> -->
 
   </lightning-card>
 </template>

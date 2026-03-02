@@ -19,7 +19,15 @@ export default class NewKeyResultModal extends LightningElement {
         { label: 'Surveys', value: 'Survey' },
         { label: 'Reviews', value: 'Review' },
         { label: 'GoogleReviews', value: 'GoogleReview' },
-        { label: 'CaseStudies', value: 'CaseStudy' }
+        { label: 'CaseStudies', value: 'CaseStudy' },
+        { label: 'Events', value: 'Event' }
+    ];
+
+    statusOptions = [
+        { label: 'Not Started', value: 'Not Started' },
+        { label: 'In progress', value: 'In progress' },
+        { label: 'Completed', value: 'Completed' },
+        { label: 'Abandoned', value: 'Abandoned' }
     ];
 
     connectedCallback() {
@@ -49,6 +57,10 @@ export default class NewKeyResultModal extends LightningElement {
 
     handleNameChange(e) {
         this.name = e.detail.value;
+    }
+
+    handleStatusChange(e) {
+        this.status = e.detail.value;
     }
 
     handleObjectTypeChange(e) {
@@ -106,9 +118,6 @@ export default class NewKeyResultModal extends LightningElement {
 
             if (!objectTypes.length) throw new Error('Add at least one target.');
 
-            console.log('💾 objectTypes:', objectTypes);
-            console.log('💾 targetValues:', targetValues);
-
             // Step 1: Save Key Result
             const savedKr = await saveKeyResult({
                 kr: {
@@ -118,8 +127,6 @@ export default class NewKeyResultModal extends LightningElement {
                 }
             });
 
-            console.log('✅ KR saved:', savedKr.Id);
-
             const targetsJson = JSON.stringify(
                 objectTypes.map((ot, i) => ({
                     objectType: ot,
@@ -127,15 +134,13 @@ export default class NewKeyResultModal extends LightningElement {
                 }))
             );
 
-console.log('💾 targetsJson:', targetsJson);
-
             // Step 2: Save targets using simple arrays
             await saveKeyResultTargets({
                 keyResultId: savedKr.Id,
                 targetsJson: targetsJson
             });
 
-            console.log('✅ Targets saved!');
+            //console.log('✅ Targets saved!');
 
             this.dispatchEvent(new CustomEvent('save', {
                 detail: { keyResultId: savedKr.Id }
@@ -149,6 +154,9 @@ console.log('💾 targetsJson:', targetsJson);
                 }
             }));
         }
+    }
+    connectedCallback() {
+        console.log('objectivesWithKeyResults', JSON.stringify(this.objectivesWithKeyResults));
     }
 
     handleCancel() {

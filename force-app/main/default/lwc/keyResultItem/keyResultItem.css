@@ -1,0 +1,47 @@
+.key-result-card {
+    background: #f3f2f2;
+    border: 1px solid #dddbda;
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+}
+
+.key-result-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #080707;
+    margin-bottom: 0.5rem;
+}
+
+.targets-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.target-item {
+    font-size: 0.8125rem;
+    color: #000000;
+    padding: 0.125rem 0;
+}
+
+.target-label {
+    font-weight: 500;
+}
+
+.target-count {
+    color: #000000;
+}
+
+.no-targets {
+    font-size: 0.8125rem;
+    color: #706e6b;
+    font-style: italic;
+}
+
+.kr-status {
+    flex-shrink: 0;
+    margin-left: 0.75rem;
+}

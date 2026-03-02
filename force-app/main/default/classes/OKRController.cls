@@ -1,15 +1,18 @@
+// public Makes the class accessible to other Apex code and to LWC/Aura (when methods are @AuraEnabled).
 public with sharing class OKRController {
-    // Basic Objective methods
+
+    // Returns a list of Objective__c records for a user and year.
     @AuraEnabled(cacheable=true)
     public static List<Objective__c> getObjectives(Id ownerId, Integer year) {
         return [
-            SELECT Id, Name, Description__c, Year__c, Category__c, TargetValue__c, Status__c
+            SELECT Id, Name, Description__c, Year__c, Category__c, TargetValue__c
                 FROM Objective__c 
                 WHERE OwnerId = :ownerId 
                 AND Year__c = :year 
                 ORDER BY Order__c];
     }
 
+    // Returns a list of User picklist options for the UI.
     @AuraEnabled(cacheable=true)
     public static List<UserOption> getActiveUsers() {
     try {
@@ -19,7 +22,6 @@ public with sharing class OKRController {
             FROM User
             WHERE IsActive = true
             ORDER BY Name
-            LIMIT 200
         ]) {
             out.add(new UserOption((String)u.Id, u.Name));
         }
@@ -30,6 +32,7 @@ public with sharing class OKRController {
     }
 }
 
+// A simple data transfer object that serializes nicely to JSON for LWC
 public class UserOption {
     @AuraEnabled public String value;
     @AuraEnabled public String label;
@@ -39,16 +42,16 @@ public class UserOption {
     }
 }
 
-    // Basic Key Result methods
+    // Returns all Key_Result__c for an Objective.
     @AuraEnabled(cacheable=true)
     public static List<Key_Result__c> getKeyResults(Id objectiveId) {
-        return [SELECT Id, Name, Current_Value__c, Target_Value__c 
+        return [SELECT Id, Name, Current_Value__c, Target_Value__c, Status__c 
                 FROM Key_Result__c 
                 WHERE Objective__c = :objectiveId 
                 ORDER BY Order__c];
     }
-    // Handle Objective and Key Result creation
 
+    // Save Key Result and ensure a related Key Result Target row exists or updated for the metric
     @AuraEnabled
     public static Key_Result__c saveKeyResult(Key_Result__c kr) {
         // Validate input
@@ -70,7 +73,7 @@ public class UserOption {
             throw new AuraHandledException('Failed to save Key Result: ' + e.getMessage());
         }
 
-        // Ensure we have an Id after upsert
+        // Ensure we have an Id after upsert, because sometimes in certain patterns the passed object may not have Id
         if (kr.Id == null) {
             if (krRes != null && krRes.isSuccess()) {
                 kr.Id = krRes.getId();
@@ -89,7 +92,8 @@ public class UserOption {
             'Surveys'        => 'Survey',
             'Reviews'        => 'Review',
             'GoogleReviews'  => 'GoogleReview',
-            'CaseStudies'    => 'CaseStudy'
+            'CaseStudies'    => 'CaseStudy',
+            'Events'        => 'Event'
         };
 
         String rawMetric = kr.Metric__c;
@@ -108,7 +112,7 @@ public class UserOption {
             }
 
             try {
-                // Upsert a single Key_Result_Target__c per (KR, Object_Type__c)
+                // Enforce uniqueness 1 target per ObjectType of KR
                 Key_Result_Target__c existingTarget = null;
                 for (Key_Result_Target__c t : [
                     SELECT Id, Key_Result__c, Object_Type__c, Target__c
@@ -144,20 +148,13 @@ public class UserOption {
     // subtype is only for WebLead
     // ==============================
 
+    // Normalizer for string object types inputs, to avoid issues with extra spaces or nulls.
     private static String norm(String s) {
         return String.isBlank(s) ? '' : s.trim();
     }
 
-    private static String makeKey(String objectType) {
-        String ot = norm(objectType);
 
-        // subtype only matters for WebLead
-        if (ot == 'WebLead') {
-                return ot; // allow multiple like WebLead|LinkedIn, WebLead|Web
-            }
-        return norm(objectType); // for other types, just use the object type as key
-    }
-
+    // Returns list of targets from Key_Result_Target__c for UI editing.
     @AuraEnabled(cacheable=true)
     public static List<TargetInput> getKeyResultTargets(Id keyResultId) {
         List<TargetInput> out = new List<TargetInput>();
@@ -176,11 +173,9 @@ public class UserOption {
         return out;
     }
 
-@AuraEnabled
-public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
-    System.debug('🔧 saveKeyResultTargets CALLED');
-    System.debug('🔧 keyResultId: ' + keyResultId);
-    System.debug('🔧 targetsJson: ' + targetsJson);
+    // Saves targets for a Key Result, expects a JSON string of list of {objectType, target} objects.
+    @AuraEnabled
+    public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
     
     if (keyResultId == null) {
         throw new AuraHandledException('keyResultId is required');
@@ -196,12 +191,10 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
     ];
     if (!existing.isEmpty()) {
         delete existing;
-        System.debug('🔧 Deleted ' + existing.size() + ' existing targets');
     }
 
     // Parse JSON
     List<Object> parsed = (List<Object>) JSON.deserializeUntyped(targetsJson);
-    System.debug('🔧 Parsed ' + parsed.size() + ' targets');
     
     List<Key_Result_Target__c> toInsert = new List<Key_Result_Target__c>();
     
@@ -209,8 +202,6 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
         Map<String, Object> row = (Map<String, Object>) item;
         String objectType = (String) row.get('objectType');
         Integer targetVal = ((Decimal) row.get('target')).intValue();
-        
-        System.debug('🔧 Adding: ' + objectType + ' = ' + targetVal);
         
         if (String.isBlank(objectType) || targetVal == null) continue;
         
@@ -220,16 +211,13 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
             Target__c = targetVal
         ));
     }
-
-    System.debug('🔧 Inserting ' + toInsert.size() + ' targets');
     
     if (!toInsert.isEmpty()) {
         insert toInsert;
-        System.debug('✅ Successfully inserted ' + toInsert.size() + ' targets');
     }
 }
 
-    // Get counts of related records for a Key Result
+    // Get counts of related records for a Key Result, returns a Map<String, Integer> of counts for different objects.
     @AuraEnabled(cacheable=true)
     public static Map<String, Integer> getRelatedRecordsCount(Id keyResultId) {
         Map<String, Integer> counts = new Map<String, Integer>();
@@ -306,23 +294,7 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
             WHERE Id = :objectiveId];
     }
 
-    // Fetch related records for a Key Result
-    // @AuraEnabled(cacheable=true)
-    // public static List<RelatedRecordWrapper> getRelatedRecords(Id keyResultId) {
-    //     List<Related_Record__c> records = [
-    //         SELECT Id, Name__c, Record_Type__c, Date__c, Status__c, ContractType__c
-    //         FROM Related_Record__c
-    //         WHERE Key_Result__c = :keyResultId
-    //         ORDER BY Date__c DESC
-    //     ];
-
-    //     List<RelatedRecordWrapper> wrappers = new List<RelatedRecordWrapper>();
-    //     for (Related_Record__c record : records) {
-    //         wrappers.add(new RelatedRecordWrapper(record));
-    //     }
-    //     return wrappers;
-    // }
-
+    // Dynamic record creation method
     @AuraEnabled
         public static Id createRelatedRecord(String objectApiName, Id keyResultId, Map<String, Object> fields) {
             if (String.isBlank(objectApiName)) {
@@ -348,13 +320,22 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
             return (Id)newRecord.get('Id');
         }
 
-    // Fetch Objectives with their Key Results
+        @AuraEnabled
+        public static void createEventLink(Id keyResultId, Id recordId, String objectType){
+            insert new Key_Result_Event_Link__c(
+                Key_Result__c = keyResultId,
+                RecordId__c = String.valueOf(recordId),
+                Object_Type__c = objectType
+             );
+        }
+
+    // Fetch Objectives with their Key Results, builds a hierarchical DTO
     @AuraEnabled(cacheable=true)
     public static List<ObjectiveWithKeyResults> getObjectivesWithKeyResults(Id ownerId, Integer year) {
 
     // 1) Objectives
     List<Objective__c> objectives = [
-        SELECT Id, Name, Description__c, Year__c, Category__c, Status__c, Order__c, User__c
+        SELECT Id, Name, Description__c, Year__c, Category__c, Order__c, User__c
         FROM Objective__c
         WHERE User__c = :ownerId AND Year__c = :year
         ORDER BY Order__c
@@ -364,18 +345,7 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
     Set<Id> objIds = new Set<Id>();
     for (Objective__c o : objectives) objIds.add(o.Id);
 
-    // existing overall WebLead line
-
-    // if (w.webLeadTarget > 0) {
-    //     w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, w.webLeadTarget));
-    // } else if (w.webLeadCount > 0) {
-    //     // still show current even if no target set
-    //     w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, 0));
-    // }
-
-    // end WebLead special handling
-
-    // 2) Key Results -> wrappers
+    // 2) Sets objectives to their KRs, KRs Id to wrapper
     Map<Id, List<KeyResultWrapper>> krMap = new Map<Id, List<KeyResultWrapper>>();
     Map<Id, KeyResultWrapper> krWrapById = new Map<Id, KeyResultWrapper>();
     Set<Id> krIds = new Set<Id>();
@@ -436,7 +406,8 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
         'Survey'        => 'Surveys',
         'Review'        => 'Reviews',
         'GoogleReview'  => 'GoogleReviews',
-        'CaseStudy'     => 'CaseStudies'
+        'CaseStudy'     => 'CaseStudies',
+        'Event'         => 'Events'
     };
 
     for (Key_Result_Event_Link__c link : allLinks) {
@@ -470,22 +441,20 @@ public static void saveKeyResultTargets(Id keyResultId, String targetsJson) {
             else if (canon == 'Review')      w.reviewCount++;
             else if (canon == 'GoogleReview')w.googleReviewCount++;
             else if (canon == 'CaseStudy')   w.caseStudyCount++;
+            else if (canon == 'Event')       w.eventCount++;
         }
     }
 
-    // 3b) Targets from Key_Result_Target__c
-    System.debug('🔍 Loading targets from Key_Result_Target__c...');
+    // 3b) Load targets from Key_Result_Target__c
 
-for (Key_Result_Target__c tr : [
-    SELECT Key_Result__c, Object_Type__c, Target__c
-    FROM Key_Result_Target__c
-    WHERE Key_Result__c IN :krIds
-]) {
-    System.debug('🔍 Found target record: KR=' + tr.Key_Result__c + ', Object_Type__c=' + tr.Object_Type__c + ', Target=' + tr.Target__c);
+    for (Key_Result_Target__c tr : [
+        SELECT Key_Result__c, Object_Type__c, Target__c
+        FROM Key_Result_Target__c
+        WHERE Key_Result__c IN :krIds
+    ]) {
     
     KeyResultWrapper w = krWrapById.get(tr.Key_Result__c);
     if (w == null) {
-        System.debug('⚠️ Wrapper not found for KR: ' + tr.Key_Result__c);
         continue;
     }
 
@@ -496,42 +465,43 @@ for (Key_Result_Target__c tr : [
 
     if (canon == 'Opportunity') {
         w.opportunityTarget = targetVal;
-        System.debug('✅ Set opportunityTarget = ' + targetVal);
+        //System.debug('✅ Set opportunityTarget = ' + targetVal);
     }
     else if (canon == 'Call') {
         w.callTarget = targetVal;
-        System.debug('✅ Set callTarget = ' + targetVal);
+        //System.debug('✅ Set callTarget = ' + targetVal);
     }
     else if (canon == 'Contract') {
         w.contractTarget = targetVal;
-        System.debug('✅ Set contractTarget = ' + targetVal);
+        //System.debug('✅ Set contractTarget = ' + targetVal);
     }
     else if (canon == 'WebLead') {
         w.webLeadTarget = targetVal;
-        System.debug('✅ Set webLeadTarget = ' + targetVal);
+        //System.debug('✅ Set webLeadTarget = ' + targetVal);
     }
     else if (canon == 'Survey') {
         w.surveyTarget = targetVal;
-        System.debug('✅ Set surveyTarget = ' + targetVal);
+        //System.debug('✅ Set surveyTarget = ' + targetVal);
     }
     else if (canon == 'Review') {
         w.reviewTarget = targetVal;
-        System.debug('✅ Set reviewTarget = ' + targetVal);
+        //System.debug('✅ Set reviewTarget = ' + targetVal);
     }
     else if (canon == 'GoogleReview') {
         w.googleReviewTarget = targetVal;
-        System.debug('✅ Set googleReviewTarget = ' + targetVal);
+        //System.debug('✅ Set googleReviewTarget = ' + targetVal);
+    }
+    else if (canon == 'Event') {
+        w.eventTarget = targetVal;
     }
     else if (canon == 'CaseStudy') {
         w.caseStudyTarget = targetVal;
-        System.debug('✅ Set caseStudyTarget = ' + targetVal);
+        //System.debug('✅ Set caseStudyTarget = ' + targetVal);
     }
     else {
-        System.debug('❌ UNKNOWN Object_Type__c: ' + canon);
+        System.debug(' UNKNOWN Object_Type__c: ' + canon);
     }
 }
-
-System.debug('🔍 Finished loading targets');
 
     // 3c) Build KR targets list for UI from canonical keys
     for (Id krId : krWrapById.keySet()) {
@@ -540,39 +510,33 @@ System.debug('🔍 Finished loading targets');
 
         if (w.opportunityTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('Opportunities', w.opportunityCount, w.opportunityTarget));
-        System.debug('  Added Opportunities: ' + w.opportunityCount + '/' + w.opportunityTarget);
     }
     if (w.callTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('Calls', w.callCount, w.callTarget));
-        System.debug('  Added Calls: ' + w.callCount + '/' + w.callTarget);
     }
     if (w.contractTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('Contracts', w.contractCount, w.contractTarget));
-        System.debug('  Added Contracts: ' + w.contractCount + '/' + w.contractTarget);
     }
     if (w.surveyTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('Surveys', w.surveyCount, w.surveyTarget));
-        System.debug('  Added Surveys: ' + w.surveyCount + '/' + w.surveyTarget);
     }
     if (w.reviewTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('Reviews', w.reviewCount, w.reviewTarget));
-        System.debug('  Added Reviews: ' + w.reviewCount + '/' + w.reviewTarget);
     }
     if (w.googleReviewTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('GoogleReviews', w.googleReviewCount, w.googleReviewTarget));
-        System.debug('  Added GoogleReviews: ' + w.googleReviewCount + '/' + w.googleReviewTarget);
     }
     if (w.caseStudyTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('CaseStudies', w.caseStudyCount, w.caseStudyTarget));
-        System.debug('  Added CaseStudies: ' + w.caseStudyCount + '/' + w.caseStudyTarget);
+    }
+    if (w.eventTarget > 0) {
+        w.targets.add(new KeyResultTargetWrapper('Events', w.eventCount, w.eventTarget));
     }
     if (w.webLeadTarget > 0) {
         w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, w.webLeadTarget));
-        System.debug('  Added WebLeads: ' + w.webLeadCount + '/' + w.webLeadTarget);
     } else if (w.webLeadCount > 0) {
         // Show current even if no target set
         w.targets.add(new KeyResultTargetWrapper('WebLeads', w.webLeadCount, 0));
-        System.debug('  Added WebLeads (no target): ' + w.webLeadCount + '/0');
     }
 
         // Breakdown lines (current only, auto from LeadSource)
@@ -585,7 +549,7 @@ System.debug('🔍 Finished loading targets');
     }
 
 
-    // 3d) Compute completion based on KR.Metric__c mapped to canonical key
+    // 3d) Compute computedCurrent and computedTarget
     Map<String, String> uiMetricToCanon = new Map<String, String>{
         'Opportunities' => 'Opportunity',
         'Calls'         => 'Call',
@@ -595,6 +559,7 @@ System.debug('🔍 Finished loading targets');
         'Reviews'       => 'Review',
         'GoogleReviews' => 'GoogleReview',
         'CaseStudies'   => 'CaseStudy',
+        'Events'        => 'Event',
         'Opportunity'   => 'Opportunity',
         'Call'          => 'Call',
         'Contract'      => 'Contract',
@@ -602,7 +567,8 @@ System.debug('🔍 Finished loading targets');
         'Survey'        => 'Survey',
         'Review'        => 'Review',
         'GoogleReview'  => 'GoogleReview',
-        'CaseStudy'     => 'CaseStudy'
+        'CaseStudy'     => 'CaseStudy',
+        'Event'         => 'Event'
     };
 
     for (Id krId : krWrapById.keySet()) {
@@ -620,6 +586,7 @@ System.debug('🔍 Finished loading targets');
         else if (canon == 'Review')      { current = w.reviewCount;      target = w.reviewTarget; }
         else if (canon == 'GoogleReview'){ current = w.googleReviewCount;target = w.googleReviewTarget; }
         else if (canon == 'CaseStudy')   { current = w.caseStudyCount;   target = w.caseStudyTarget; }
+        else if (canon == 'Event')       { current = w.eventCount;       target = w.eventTarget; }
 
         w.computedCurrent = current;
         w.computedTarget = target;
@@ -627,7 +594,7 @@ System.debug('🔍 Finished loading targets');
     }
 
 
-    // 4. Objective totals + objective lines
+    // 4. Objective-level totals and completion
     List<ObjectiveWithKeyResults> results = new List<ObjectiveWithKeyResults>();
 
     for (Objective__c obj : objectives) {
@@ -636,8 +603,8 @@ System.debug('🔍 Finished loading targets');
         Integer totalKrs = wrapped.size();
         Integer completedKrs = 0;
 
-        Integer oppCount = 0, callCount = 0, ctrCount = 0, leadCount = 0, survCount = 0, revCount = 0, googCount = 0, caseCount = 0;
-        Integer oppT = 0, callT = 0, ctrT = 0, leadT = 0, survT = 0, revT = 0, googT = 0, caseT = 0;
+        Integer oppCount = 0, callCount = 0, ctrCount = 0, leadCount = 0, survCount = 0, revCount = 0, googCount = 0, caseCount = 0, eventCount = 0;
+        Integer oppT = 0, callT = 0, ctrT = 0, leadT = 0, survT = 0, revT = 0, googT = 0, caseT = 0, eventT = 0;
         
         for (KeyResultWrapper w : wrapped) {
                 // objective-level current totals by KR metric
@@ -651,6 +618,7 @@ System.debug('🔍 Finished loading targets');
                 else if (m == 'Reviews')       revCount  += w.computedCurrent;
                 else if (m == 'GoogleReviews') googCount += w.computedCurrent;
                 else if (m == 'CaseStudies')   caseCount += w.computedCurrent;
+                else if (m == 'Events')         w.eventCount += w.computedCurrent;
 
                 // objective-level target totals (sum all KR targets)
                 oppT  += (w.opportunityTarget == null ? 0 : w.opportunityTarget);
@@ -674,13 +642,13 @@ System.debug('🔍 Finished loading targets');
 
         ObjectiveWithKeyResults owrap = new ObjectiveWithKeyResults(
             obj, wrapped,
-            oppCount, callCount, ctrCount, leadCount, survCount, revCount, googCount, caseCount
+            oppCount, callCount, ctrCount, leadCount, survCount, revCount, googCount, caseCount, eventCount
         );
         owrap.KeyResultTotalCount = totalKrs;
         owrap.KeyResultCompletedCount = completedKrs;
         owrap.ObjectiveCompletionPercent = objPct;
 
-        // Objective lines (for task screenshot)
+        // Objective lines (one line in objective totals)
         owrap.lines = new List<ObjectiveTargetLine>();
         if (leadT > 0) owrap.lines.add(new ObjectiveTargetLine('WebLeads',      leadCount, leadT));
         if (oppT  > 0) owrap.lines.add(new ObjectiveTargetLine('Opportunities', oppCount,  oppT));
@@ -690,12 +658,14 @@ System.debug('🔍 Finished loading targets');
         if (revT  > 0) owrap.lines.add(new ObjectiveTargetLine('Reviews',       revCount,  revT));
         if (googT > 0) owrap.lines.add(new ObjectiveTargetLine('GoogleReviews', googCount, googT));
         if (caseT > 0) owrap.lines.add(new ObjectiveTargetLine('CaseStudies',   caseCount, caseT));
+        if (eventT > 0) owrap.lines.add(new ObjectiveTargetLine('Events',         eventCount, eventT));
 
         results.add(owrap);
     }
 
     return results;
 }
+    // Used to make strings comparable when UI might send “Google Reviews” vs “GoogleReviews”
     private static String normalizeType(String s) {
             if (String.isBlank(s)) return null;
             return s.replace(' ', '');
@@ -705,6 +675,7 @@ System.debug('🔍 Finished loading targets');
     // WRAPPERS
     // =========================
 
+    // Wrapper for Objective with its Key Results and related counts, used for LWC display.
    public class ObjectiveWithKeyResults {
     @AuraEnabled public Objective__c objective             { get; set; }
     @AuraEnabled public List<KeyResultWrapper> keyResults  { get; set; }
@@ -716,6 +687,7 @@ System.debug('🔍 Finished loading targets');
     @AuraEnabled public Integer ReviewCount        { get; set; }
     @AuraEnabled public Integer GoogleReviewCount  { get; set; }
     @AuraEnabled public Integer CaseStudyCount     { get; set; }
+    @AuraEnabled public Integer EventCount         { get; set; }
     @AuraEnabled public Integer KeyResultTotalCount { get; set; }
     @AuraEnabled public Integer KeyResultCompletedCount { get; set; }
     @AuraEnabled public Decimal ObjectiveCompletionPercent { get; set; }
@@ -733,7 +705,8 @@ System.debug('🔍 Finished loading targets');
             Integer surveyCount,
             Integer reviewCount,
             Integer googleReviewCount,
-            Integer caseStudyCount
+            Integer caseStudyCount,
+            Integer eventCount
         ) {
             this.objective          = obj;
             this.keyResults         = krs;
@@ -745,9 +718,11 @@ System.debug('🔍 Finished loading targets');
             this.ReviewCount        = reviewCount;
             this.GoogleReviewCount  = googleReviewCount;
             this.CaseStudyCount     = caseStudyCount;
+            this.EventCount         = eventCount;
         }
     }
 
+    // Simple wrapper for objective-level target lines (e.g. WebLeads: 30/50)
     public class ObjectiveTargetLine {
         @AuraEnabled public String objectType;
         @AuraEnabled public Integer current;
@@ -760,6 +735,7 @@ System.debug('🔍 Finished loading targets');
         }
     }
 
+    // Wrapper for Key Result targets, used for UI editing of multiple targets.
     public class KeyResultTargetWrapper {
             @AuraEnabled public String objectType;
             @AuraEnabled public Integer target;
@@ -773,69 +749,11 @@ System.debug('🔍 Finished loading targets');
             }
         }
 
+        // Used for editing targets when creating new Key Result
         public class TargetInput {
             @AuraEnabled public String objectType;   // e.g. 'Opportunity', 'WebLead'
             @AuraEnabled public Integer target;      // e.g. 50    
-            // only for WebLead, e.g. 'LinkedIn'
         }
-
-
-
-        // Wrapper for Related Record
-    // public class RelatedRecordWrapper {
-    //     @AuraEnabled public String id;
-    //     @AuraEnabled public String recordType;
-    //     @AuraEnabled public String name;
-    //     @AuraEnabled public Date recordDate;
-    //     @AuraEnabled public String status;
-    //     @AuraEnabled public String recordId;
-
-    //     public RelatedRecordWrapper(Related_Record__c record) {
-    //         this.id = record.Id;
-    //         this.recordType = record.Record_Type__c;
-    //         this.name = record.Name__c != null ? record.Name__c : record.Id; // safer
-    //         this.recordDate = record.Date__c;
-    //         this.status = record.Status__c;
-    //         this.recordId = record.Id; // fixed
-    //     }
-    // }
-
-    
-
-    // Wrapper for Objective with counts
-    // public class ObjectiveWrapper {
-    //     @AuraEnabled public Objective__c objective { get; set; }
-    //     @AuraEnabled public Integer OpportunityCount { get; set; }
-    //     @AuraEnabled public Integer CallCount { get; set; }
-    //     @AuraEnabled public Integer ContractCount { get; set; }
-    //     @AuraEnabled public Integer LeadCount { get; set; }
-    //     @AuraEnabled public Integer SurveyCount { get; set; }
-    //     @AuraEnabled public Integer ReviewCount { get; set; }
-    //     @AuraEnabled public Integer GoogleReviewCount { get; set; }
-    //     @AuraEnabled public Integer CaseStudyCount { get; set; }
-
-    // public ObjectiveWrapper(
-    //     Objective__c o, 
-    //     Integer opps, 
-    //     Integer calls, 
-    //     Integer contracts,
-    //     Integer leads,
-    //     Integer surveys,
-    //     Integer reviews,
-    //     Integer googleReviews,
-    //     Integer caseStudies
-    //     ) {
-    //     this.objective = o;
-    //     this.OpportunityCount = opps;
-    //     this.CallCount = calls;
-    //     this.ContractCount = contracts;
-    //     this.LeadCount = leads;
-    //     this.SurveyCount = surveys;
-    //     this.ReviewCount = reviews;
-    //     this.GoogleReviewCount = googleReviews;
-    //     this.CaseStudyCount = caseStudies;
-    //     }
-    // }
 
     // Wrapper for Key Result with completion percentage
     public class KeyResultWrapper {
@@ -849,6 +767,7 @@ System.debug('🔍 Finished loading targets');
         @AuraEnabled public Integer reviewCount { get; set; }
         @AuraEnabled public Integer googleReviewCount { get; set; }
         @AuraEnabled public Integer caseStudyCount { get; set; }
+        @AuraEnabled public Integer eventCount { get; set; }
 
         @AuraEnabled public Integer opportunityTarget { get; set; }
         @AuraEnabled public Integer callTarget { get; set; }
@@ -858,6 +777,7 @@ System.debug('🔍 Finished loading targets');
         @AuraEnabled public Integer reviewTarget { get; set; }
         @AuraEnabled public Integer googleReviewTarget { get; set; }
         @AuraEnabled public Integer caseStudyTarget { get; set; }
+        @AuraEnabled public Integer eventTarget { get; set; }
 
         @AuraEnabled public Integer computedCurrent { get; set; }
         @AuraEnabled public Integer computedTarget { get; set; }
@@ -875,6 +795,7 @@ System.debug('🔍 Finished loading targets');
             reviewCount = 0;
             googleReviewCount = 0;
             caseStudyCount = 0;
+            eventCount = 0;
 
             opportunityTarget = 0;
             callTarget = 0;
@@ -884,6 +805,7 @@ System.debug('🔍 Finished loading targets');
             reviewTarget = 0;
             googleReviewTarget = 0;
             caseStudyTarget = 0;
+            eventTarget = 0;
 
             computedCurrent = 0;
             computedTarget = 0;

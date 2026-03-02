@@ -19,6 +19,14 @@
         required>
       </lightning-input>
 
+      <lightning-combobox
+        data-id="status"
+        label="KR Status"
+        value={status}
+        options={statusOptions}
+        onchange={handleStatusChange}>
+      </lightning-combobox>
+
       <!-- Targets section -->
             <div class="slds-m-top_medium">
                 <div class="slds-text-title_bold slds-m-bottom_x-small">Targets</div>
@@ -37,20 +45,6 @@
                                 required>
                             </lightning-combobox>
                         </div>
-
-                        <!-- SubType only for WebLead
-                        <template if:true={row.isWebLead}>
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12">
-                                <lightning-combobox
-                                    label="Lead Source"
-                                    value={row.subType}
-                                    options={webLeadSubTypeOptions}
-                                    data-id={row.id}
-                                    onchange={handleSubTypeChange}
-                                    required>
-                                </lightning-combobox>
-                            </div>
-                        </template> -->
 
                         <!-- Target value -->
                         <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
