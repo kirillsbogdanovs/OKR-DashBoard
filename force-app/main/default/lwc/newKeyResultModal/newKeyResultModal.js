@@ -155,9 +155,9 @@ export default class NewKeyResultModal extends LightningElement {
             }));
         }
     }
-    connectedCallback() {
-        console.log('objectivesWithKeyResults', JSON.stringify(this.objectivesWithKeyResults));
-    }
+    // connectedCallback() {
+    //     console.log('objectivesWithKeyResults', JSON.stringify(this.objectivesWithKeyResults));
+    // }
 
     handleCancel() {
         this.dispatchEvent(new CustomEvent('cancel'));

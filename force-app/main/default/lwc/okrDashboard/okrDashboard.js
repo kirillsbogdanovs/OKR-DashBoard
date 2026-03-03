@@ -49,8 +49,7 @@ export default class OkrDashboard extends LightningElement {
         console.log('USERS WIRE error:', error);
 
     if (data) {
-        this.userOptions = data; // already [{label,value}]
-        // optional default to first user
+        this.userOptions = data;
         if (!this.selectedUserId && this.userOptions.length) {
             this.selectedUserId = this.userOptions[0].value;
         }
