@@ -1,5 +1,6 @@
 import { LightningElement, api } from 'lwc';
 
+// This component is responsible for creating a new Objective.
 export default class NewObjectiveModal extends LightningElement {
     @api userOptions = [];
     @api selectedUserId;
@@ -11,6 +12,7 @@ export default class NewObjectiveModal extends LightningElement {
         { label: '2025', value: '2025' }
     ];
 
+    // Handle changes to the name field
      handleSave() {
         try {
             const nameEl = this.template.querySelector('[data-id="name"]');
@@ -36,6 +38,7 @@ export default class NewObjectiveModal extends LightningElement {
         }
     }
 
+    // Closes the fields without saving
     handleCancel() {
         this.dispatchEvent(new CustomEvent('cancel'));
     }

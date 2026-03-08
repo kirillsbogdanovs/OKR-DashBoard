@@ -43,6 +43,7 @@ export default class OkrDashboard extends LightningElement {
         return this.selectedUserId || this.userId;
     }
 
+    // Wire to get active users for the user filter dropdown
    @wire(getActiveUsers)
     wiredUsers({ data, error }) {
         console.log('USERS WIRE data:', data);
@@ -73,7 +74,7 @@ export default class OkrDashboard extends LightningElement {
         }
     }
 
-    // 🧩 Group objectives by category (based on their wrapper.objective.Category__c)
+    // Group objectives by category (based on their wrapper.objective.Category__c)
     get groupedObjectives() {
     if (!this.objectivesWithKeyResults || this.objectivesWithKeyResults.length === 0){
         return [];
@@ -96,7 +97,7 @@ export default class OkrDashboard extends LightningElement {
     return Object.values(grouped);
 }
 
-     // 📆 Handle year change
+     // Handle year change
     handleYearChange(event) {
         this.selectedYear = event.detail.value;
         if (this.wiredObjectives) {
@@ -104,10 +105,12 @@ export default class OkrDashboard extends LightningElement {
         }
     }
 
+    // Handle user change
     handleUserChange(event) {
         this.selectedUserId = event.detail.value;
     }
 
+    // Open modal to create new objective
     handleNewObjective() {
         // Just open the child modal component
         this.showModal = true;
@@ -137,12 +140,6 @@ export default class OkrDashboard extends LightningElement {
         this.handleSaveObjective(event);
     }
 
-    computeCompletion(kr) {
-    if (!kr.Target_Value__c || kr.Target_Value__c === 0) return 0;
-    const value = (kr.Current_Value__c / kr.Target_Value__c) * 100;
-    return Math.min(Math.round(value), 100);
-    }
-
     // Style progress bar depending on completion
     progressVariant(kr) {
         return kr.Current_Value__c >= kr.Target_Value__c ? 'success' : 'base';
@@ -165,6 +162,8 @@ export default class OkrDashboard extends LightningElement {
             new ShowToastEvent({ title, message, variant })
         );
     }
+
+    // Handle click on OKR Menu buttons
     handleMenuSelect(event) {
     const action = event.detail.value;
 
@@ -227,8 +226,9 @@ export default class OkrDashboard extends LightningElement {
         }
     }
 
+    // Prepare data and open modal for creating related record (Review, Survey, etc.)
     prepareKeyResultAndOpenModal(objectApiName, title, fields) {
-    const krId = this.getDefaultKeyResultId();
+    const krId = this.getDefaultKeyResultId(objectApiName);
 
     if (!krId) {
         this.showToast(
@@ -239,26 +239,58 @@ export default class OkrDashboard extends LightningElement {
         return;
     }
 
+    const ObjectTypeList = {
+        'Survey__c': {count: 'surveyCount', target: 'surveyTarget'},
+        'Review__c': {count: 'reviewCount', target: 'reviewTarget'},
+        'Case_Study__c': {count: 'caseStudyCount', target: 'caseStudyTarget'},
+        'Google_Review__c': {count: 'googleReviewCount', target: 'googleReviewTarget'}
+    };
+
+    const objmapping = ObjectTypeList[objectApiName];
+    if (objmapping) {
+        for (const wrapper of (this.objectivesWithKeyResults || [])) {
+            for (const krWrapper of (wrapper.keyResults || [])){
+                if (krWrapper.keyResult.Id === krId) {
+                    console.log('objectApiName:', objectApiName);
+                    console.log('krId selected:', krId);
+                    console.log('selectedObjectiveId:', this.selectedObjectiveId);
+                    const currentcount = krWrapper[objmapping.count] || 0;
+                    const targetcount = krWrapper[objmapping.target] || 0;
+                    if (targetcount > 0 && currentcount >= targetcount) {
+                        console.log('Found KR:', krWrapper.keyResult.Name);
+                        console.log('currentcount:', currentcount, 'targetcount:', targetcount);
+                        this.showToast('Warning', `Maximum target for ${title} has been reached!`, 'warning');
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     // store chosen KR so the modal can use it in the hidden Key_Result__c field
     this.selectedKeyResultId = krId;
 
     // reuse your existing method
     this.openCreateModal(objectApiName, title, fields);
     }
+    // Open generic create modal for related records (Reviews, Surveys, etc.)
     openRelatedModal(objectApiName, fields) {
         this.modalObjectApi = objectApiName;
         this.modalFields = fields;
         this.showRelatedModal = true;
     }
+    // Open generic create modal for related records (Reviews, Surveys, etc.)
     openCreateModal(objectApiName, title, fields) {
         this.createObjectApi = objectApiName;
         this.createTitle = title;
         this.createFields = fields;
         this.showCreateModal = true;
     }
+    // Close modals
     closeCreateModal() {
         this.showCreateModal = false;
     }
+    // Close modals when new record is created successfully
     handleCreateSuccess() {
         this.showToast('Success', `${this.createTitle} created!`, 'success');
         this.showCreateModal = false;
@@ -267,66 +299,88 @@ export default class OkrDashboard extends LightningElement {
             return refreshApex(this.wiredObjectives);
         }
     }
+
+    // Cancel related record modal without creating
     handleKeyResultCancel() {
         this.showKeyResultModal = false;
     }
 
+    // Handle errors from the create record modal
     handleCreateError(event) {
         const msg = event?.detail?.message || 'Failed to create record.';
         this.showToast('Error', msg, 'error');
     }
 
+    // Handle successful creation of related record (Review, Survey, etc.)
     handleRecordCreated() {
         this.showToast('Success', 'Record created successfully!', 'success');
         this.showRelatedModal = false;
         // Optionally refresh the list
         return refreshApex(this.wiredObjectives);
     }
+
+    // Handle click on a Key Result to select it (for creating related records)
     handleKeyResultSelect(event) {
         this.selectedKeyResultId = event.currentTarget.dataset.id;
         this.showToast('Info', 'Key Result selected!', 'info');
     }
 
+    // Handle click on button under a Key Result
     handleAddKeyResult(event) {
     // objective id comes from objectiveCard
         this.keyResultObjectiveId = event.detail;
         this.showKeyResultModal = true;
     }
+
+    // Handle successful creation of a Key Result
     handleKeyResultSuccess() {
         this.showToast('Success', 'Key Result created!', 'success');
         this.showKeyResultModal = false;
         return this.wiredObjectives ? refreshApex(this.wiredObjectives) : null;
     }
 
-    getDefaultKeyResultId() {
+    // If no KR is found for the selected objective, take the first KR that it can find under that objective
+    getDefaultKeyResultId(objectApiName) {
     // No data loaded yet
     if (!this.objectivesWithKeyResults || this.objectivesWithKeyResults.length === 0) {
         return null;
     }
 
+    const objectTypeList = {
+        'Survey__c': 'surveyTarget',
+        'Review__c': 'reviewTarget',
+        'Case_Study__c': 'caseStudyTarget',
+        'Google_Review__c': 'googleReviewTarget'
+    };
+
+    const targetField = objectTypeList[objectApiName];
+
     // 1) Prefer the Objective selected in the combobox, if any
-    let candidateObj = null;
-    if (this.selectedObjectiveId) {
-        candidateObj = this.objectivesWithKeyResults.find(
-            w => w.objective.Id === this.selectedObjectiveId
-        );
-    }
+    let candidateObj = this.selectedObjectiveId 
+    ? this.objectivesWithKeyResults.find(w => w.objective.Id === this.selectedObjectiveId
+    ) : null;
 
     // 2) Otherwise, pick the first objective that has at least one key result
     if (!candidateObj) {
-        candidateObj = this.objectivesWithKeyResults.find(
-            w => w.keyResults && w.keyResults.length > 0
-        );
+        candidateObj = this.objectivesWithKeyResults.find(w => w.keyResults?.length > 0);
     }
 
-    if (!candidateObj || !candidateObj.keyResults || candidateObj.keyResults.length === 0) {
-        return null;
+    if (!candidateObj) return null;
+
+    // If we know the object type, prefer a KR that has a target for it
+    if (targetField) {
+        const krWithTarget = candidateObj.keyResults.find(kr => (kr[targetField] || 0) > 0);
+        if (krWithTarget) return krWithTarget.keyResult.Id;
     }
 
     // We just take the FIRST key result under that objective
-        return candidateObj.keyResults[0].keyResult.Id;
+        return candidateObj.keyResults[0]?.keyResult?.Id ?? null;
     }
-    
+
+    // ======================
+    // Getters for UI display
+    // ======================
+
     get selectedUserName() {
     if (!this.userOptions || !this.selectedUserId) {
         return '';
@@ -354,11 +408,10 @@ export default class OkrDashboard extends LightningElement {
         return this.objectivesWithKeyResults ? this.objectivesWithKeyResults.length : 0;
     }
 
+    // Handle successful creation of a Key Result and refresh the data to show it in the list
     handleSaveKeyResult(event) {
-        // The modal already saved the Key Result successfully
-        // We just need to refresh the data and close the modal
         
-        console.log('✅ Key Result saved, refreshing data...');
+        console.log('Key Result saved, refreshing data...');
         
         this.showKeyResultModal = false;
         
@@ -376,6 +429,7 @@ export default class OkrDashboard extends LightningElement {
         }
     }
     
+    // Handle click on adding Key Result with button from objectiveCard, open the modal and pass the selected objective id
     handleAddKeyResult(event) {
         // When launched from objectiveCard context, we have a concrete objective id
 
@@ -395,8 +449,9 @@ export default class OkrDashboard extends LightningElement {
             this.showToast('Success', 'Key Result created!', 'success');
         }
     }
+
+    // Getters to build options for comboboxes based on loaded data
     get objectiveOptions() {
-    // if you have groupedObjectives = [{ category, objectives: [ { objective: {...}} ] }]
     const opts = [];
     (this.groupedObjectives || []).forEach(group => {
         (group.objectives || []).forEach(objWrap => {
@@ -410,6 +465,7 @@ export default class OkrDashboard extends LightningElement {
     return opts;
     }
 
+    // Build options for the "Select Key Result" dropdown in the related record creation modal
     get keyResultOptions() {
         const options = [];
         if (this.objectivesWithKeyResults) {
@@ -425,10 +481,12 @@ export default class OkrDashboard extends LightningElement {
         return options;
     }
 
+    // Handle change in the "Select Key Result" dropdown in the related record creation modal
     handleKeyResultChange(e){
         this.selectedKeyResultId = e.detail.value;
     }
 
+    // Handle successful creation of related record (Review, Survey, etc.) and refresh the data to show it in the list
     handleCreateSuccess(event){
         const recordId = event.detail.id;
         const objectTypeMap = {
@@ -460,6 +518,7 @@ export default class OkrDashboard extends LightningElement {
         });
     }
 
+    // Cancel related record modal without creating
     handleCancel() {
         this.showModal = false;
     }

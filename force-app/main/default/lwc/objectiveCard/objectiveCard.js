@@ -61,11 +61,13 @@ export default class ObjectiveCard extends LightningElement {
         return (this.objectiveWrapper?.lines || []).length > 0;
     }
 
+    // Handle click on the card to select the objective
     handleClick() {
         this.dispatchEvent(new CustomEvent('select', {
             detail: this.objective.Id
         }));
     }
+    // Handle click on "Add Key Result" button
     handleAddKeyResult() {
         const objectiveId = this.objectiveWrapper?.objective?.Id;
         this.dispatchEvent(new CustomEvent('addkeyresult', {
@@ -74,14 +76,15 @@ export default class ObjectiveCard extends LightningElement {
             composed: true
         }));
     }
+    // Handle click on the card to select the objective
     handleSelect() {
     this.dispatchEvent(
         new CustomEvent('select', {
-        detail: { objectiveId: this.objective.Id },
-        bubbles: true,
-        composed: true
-    }));
-}
+            detail: { objectiveId: this.objective.Id },
+            bubbles: true,
+            composed: true
+        }));
+    }
 
 
 }
