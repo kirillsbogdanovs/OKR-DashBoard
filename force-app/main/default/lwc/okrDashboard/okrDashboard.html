@@ -113,7 +113,8 @@
             <lightning-record-edit-form
               object-api-name={createObjectApi}
               onsuccess={handleCreateSuccess}
-              onerror={handleCreateError}>
+              onerror={handleCreateError}
+              onsubmit={handleCreateSubmit}>
               <lightning-messages></lightning-messages>
 
               <template for:each={createFields} for:item="fld">

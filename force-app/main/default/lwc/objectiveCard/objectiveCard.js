@@ -13,10 +13,6 @@ export default class ObjectiveCard extends LightningElement {
         return this.objectiveWrapper?.keyResults || [];
     }
 
-    get completionPercent() {
-        return this.objectiveWrapper?.ObjectiveCompletionPercent || 0;
-    }
-
     get opportunityCount() {
         return this.objectiveWrapper?.OpportunityCount || 0;
     }

@@ -201,14 +201,24 @@ public class UserOption {
     for (Object item : parsed) {
         Map<String, Object> row = (Map<String, Object>) item;
         String objectType = (String) row.get('objectType');
-        Integer targetVal = ((Decimal) row.get('target')).intValue();
+        Object targetRaw = row.get('target');
+        Integer targetVal = null;
+        if (targetRaw != null) {
+            if (targetRaw instanceof Decimal){
+                targetVal = ((Decimal) targetRaw).intValue();
+            } else  {
+                targetVal = Integer.valueOf(String.valueOf(targetRaw));
+            }
+        }
+        String eventType = row.containsKey('eventType') ? (String) row.get('eventType') : null;
         
         if (String.isBlank(objectType) || targetVal == null) continue;
         
         toInsert.add(new Key_Result_Target__c(
             Key_Result__c = keyResultId,
             Object_Type__c = objectType,
-            Target__c = targetVal
+            Target__c = targetVal,
+            Event_Type__c = eventType
         ));
     }
     
@@ -465,38 +475,30 @@ public class UserOption {
 
     if (canon == 'Opportunity') {
         w.opportunityTarget = targetVal;
-        //System.debug('✅ Set opportunityTarget = ' + targetVal);
     }
     else if (canon == 'Call') {
         w.callTarget = targetVal;
-        //System.debug('✅ Set callTarget = ' + targetVal);
     }
     else if (canon == 'Contract') {
         w.contractTarget = targetVal;
-        //System.debug('✅ Set contractTarget = ' + targetVal);
     }
     else if (canon == 'WebLead') {
         w.webLeadTarget = targetVal;
-        //System.debug('✅ Set webLeadTarget = ' + targetVal);
     }
     else if (canon == 'Survey') {
         w.surveyTarget = targetVal;
-        //System.debug('✅ Set surveyTarget = ' + targetVal);
     }
     else if (canon == 'Review') {
         w.reviewTarget = targetVal;
-        //System.debug('✅ Set reviewTarget = ' + targetVal);
     }
     else if (canon == 'GoogleReview') {
         w.googleReviewTarget = targetVal;
-        //System.debug('✅ Set googleReviewTarget = ' + targetVal);
     }
     else if (canon == 'Event') {
         w.eventTarget = targetVal;
     }
     else if (canon == 'CaseStudy') {
         w.caseStudyTarget = targetVal;
-        //System.debug('✅ Set caseStudyTarget = ' + targetVal);
     }
     else {
         System.debug(' UNKNOWN Object_Type__c: ' + canon);
@@ -646,7 +648,6 @@ public class UserOption {
         );
         owrap.KeyResultTotalCount = totalKrs;
         owrap.KeyResultCompletedCount = completedKrs;
-        owrap.ObjectiveCompletionPercent = objPct;
 
         // Objective lines (one line in objective totals)
         owrap.lines = new List<ObjectiveTargetLine>();
@@ -690,7 +691,6 @@ public class UserOption {
     @AuraEnabled public Integer EventCount         { get; set; }
     @AuraEnabled public Integer KeyResultTotalCount { get; set; }
     @AuraEnabled public Integer KeyResultCompletedCount { get; set; }
-    @AuraEnabled public Decimal ObjectiveCompletionPercent { get; set; }
     @AuraEnabled public List<ObjectiveTargetLine> lines { get; set; }
 
     public ObjectiveWithKeyResults() {}
@@ -752,7 +752,8 @@ public class UserOption {
         // Used for editing targets when creating new Key Result
         public class TargetInput {
             @AuraEnabled public String objectType;   // e.g. 'Opportunity', 'WebLead'
-            @AuraEnabled public Integer target;      // e.g. 50    
+            @AuraEnabled public Integer target; 
+            @AuraEnabled public String eventType;
         }
 
     // Wrapper for Key Result with completion percentage

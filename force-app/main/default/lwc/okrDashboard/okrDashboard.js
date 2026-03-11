@@ -248,21 +248,18 @@ export default class OkrDashboard extends LightningElement {
 
     const objmapping = ObjectTypeList[objectApiName];
     if (objmapping) {
-        for (const wrapper of (this.objectivesWithKeyResults || [])) {
-            for (const krWrapper of (wrapper.keyResults || [])){
-                if (krWrapper.keyResult.Id === krId) {
-                    console.log('objectApiName:', objectApiName);
-                    console.log('krId selected:', krId);
-                    console.log('selectedObjectiveId:', this.selectedObjectiveId);
-                    const currentcount = krWrapper[objmapping.count] || 0;
-                    const targetcount = krWrapper[objmapping.target] || 0;
-                    if (targetcount > 0 && currentcount >= targetcount) {
-                        console.log('Found KR:', krWrapper.keyResult.Name);
-                        console.log('currentcount:', currentcount, 'targetcount:', targetcount);
-                        this.showToast('Warning', `Maximum target for ${title} has been reached!`, 'warning');
-                        return;
-                    }
-                }
+        // Find the selected KR in the loaded data
+        const allKRs = this.objectivesWithKeyResults.flatMap(w => w.keyResults);
+
+        // Find all KRs that have a target set for this object type
+        const krsWithTarget = allKRs.filter(kr => (kr[objmapping.target] || 0) > 0);
+
+        // If there are KRs with a target, check if ALL of them are full
+        if (krsWithTarget.length > 0) {
+            const KrsWithFullTargets = krsWithTarget.every(kr => (kr[objmapping.count] || 0) >= (kr[objmapping.target] || 0));
+            if (KrsWithFullTargets) {
+                this.showToast('Warning', `Maximum target for ${title} has been reached! Create a new Key Result to add more records`, 'warning');
+                return;
             }
         }
     }
@@ -273,6 +270,7 @@ export default class OkrDashboard extends LightningElement {
     // reuse your existing method
     this.openCreateModal(objectApiName, title, fields);
     }
+    
     // Open generic create modal for related records (Reviews, Surveys, etc.)
     openRelatedModal(objectApiName, fields) {
         this.modalObjectApi = objectApiName;
@@ -354,25 +352,33 @@ export default class OkrDashboard extends LightningElement {
     };
 
     const targetField = objectTypeList[objectApiName];
+    const countField = targetField?.replace('Target', 'Count');
 
-    // 1) Prefer the Objective selected in the combobox, if any
+    // 1) Prefer the Objective selected in the combobox
     let candidateObj = this.selectedObjectiveId 
-    ? this.objectivesWithKeyResults.find(w => w.objective.Id === this.selectedObjectiveId
-    ) : null;
+        ? this.objectivesWithKeyResults.find(w => w.objective.Id === this.selectedObjectiveId) 
+        : null;
 
     // 2) Otherwise, pick the first objective that has at least one key result
     if (!candidateObj) {
-        candidateObj = this.objectivesWithKeyResults.find(w => w.keyResults?.length > 0);
+        candidateObj = this.objectivesWithKeyResults?.find(w => w.keyResults?.length > 0);
     }
 
     if (!candidateObj) return null;
 
     // If we know the object type, prefer a KR that has a target for it
     if (targetField) {
-        const krWithTarget = candidateObj.keyResults.find(kr => (kr[targetField] || 0) > 0);
+        const krWithTarget = candidateObj.keyResults.find(kr => {
+            const target = kr[targetField] || 0;
+            const count = kr[countField] || 0;
+            return target > 0 && count < target; // only consider KRs that have not yet met the target
+        });
         if (krWithTarget) return krWithTarget.keyResult.Id;
-    }
 
+        const krUnlimited = candidateObj.keyResults.find(kr => 
+            (kr[targetField] || 0) === 0); // also consider KRs with no target, as fallback
+            if (krUnlimited) return krUnlimited.keyResult.Id;
+    }
     // We just take the FIRST key result under that objective
         return candidateObj.keyResults[0]?.keyResult?.Id ?? null;
     }
@@ -484,6 +490,32 @@ export default class OkrDashboard extends LightningElement {
     // Handle change in the "Select Key Result" dropdown in the related record creation modal
     handleKeyResultChange(e){
         this.selectedKeyResultId = e.detail.value;
+    }
+
+    handleCreateSubmit(e){
+        e.preventDefault();
+        
+        const allKRs = this.objectivesWithKeyResults.flatMap(w => w.keyResults);
+        const selectedKR = allKRs.find(kr => kr.keyResult.Id === this.selectedKeyResultId);
+
+        const ObjectTypeList = {
+            'Survey__c':        { count: 'surveyCount', target: 'surveyTarget' },
+            'Review__c':        { count: 'reviewCount', target: 'reviewTarget' },
+            'Case_Study__c':    { count: 'caseStudyCount', target: 'caseStudyTarget' },
+            'Google_Review__c': { count: 'googleReviewCount', target: 'googleReviewTarget' }
+        };
+
+        const objmapping = ObjectTypeList[this.createObjectApi];
+        if (objmapping && selectedKR) {
+            const targetField = selectedKR[objmapping.target] || 0;
+            const countField = selectedKR[objmapping.count] || 0;
+            if (targetField > 0 && countField >= targetField) {
+                this.showToast('Warning', `Selected Key Result has already met the target for ${this.createTitle}. Please select another Key Result.`, 'warning');
+                return;
+            }
+        }
+
+        e.target.submit();
     }
 
     // Handle successful creation of related record (Review, Survey, etc.) and refresh the data to show it in the list

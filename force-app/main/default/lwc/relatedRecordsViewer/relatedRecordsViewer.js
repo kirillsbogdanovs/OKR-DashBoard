@@ -8,6 +8,7 @@ const ACTIONS = [
     { label: 'Delete', name: 'delete' }
 ];
 
+// This component displays related records for a given Key Result and allows users to view or delete them.
 export default class RelatedRecordsViewer extends LightningElement {
     @api keyResultId;
 
@@ -27,6 +28,7 @@ export default class RelatedRecordsViewer extends LightningElement {
         }
     ];
 
+    // Lifecycle hook to fetch records when component is initialized
     handleRowAction(event) {
         const actionName = event.detail.action.name;
         const row = event.detail.row;
@@ -38,6 +40,7 @@ export default class RelatedRecordsViewer extends LightningElement {
         }
     }
 
+    // Deletes a record and refreshes the list upon success
     async deleteRow(recordId) {
         try {
             await deleteRecord(recordId);
@@ -50,6 +53,7 @@ export default class RelatedRecordsViewer extends LightningElement {
         }
     }
 
+    // Fetches related records for the given Key Result
     showToast(title, message, variant) {
         this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }

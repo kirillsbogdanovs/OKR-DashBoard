@@ -32,6 +32,17 @@ export default class NewKeyResultModal extends LightningElement {
         { label: 'Abandoned', value: 'Abandoned' }
     ];
 
+    get activityTypeOptions() {
+        return[
+            { label: 'Email', value: 'Email'},
+            { label: 'Call', value: 'Call'},
+            { label: 'Cold Call', value: 'Cold Call'},
+            { label: 'Meeting', value: 'Meeting'},
+            { label: 'Site Visit', value: 'Site Visit'},
+            { label: 'Quote', value: 'Quote'}
+        ];
+    }
+
     // Lifecycle hooks to set default objective
     connectedCallback() {
         this.objectiveId = this.defaultObjectiveId;
@@ -53,7 +64,7 @@ export default class NewKeyResultModal extends LightningElement {
     addRow() {
         this.targetRows = [
             ...this.targetRows,
-            { id: this.newRowId(), objectType: '', target: '' }
+            { id: this.newRowId(), objectType: '', target: '', showTypeFilter: false, eventType: '' }
         ];
     }
 
@@ -75,9 +86,26 @@ export default class NewKeyResultModal extends LightningElement {
     // Handle changes to the object type of a target row
     handleObjectTypeChange(e) {
         const id = e.target.dataset.id;
-        const val = e.detail.value;
-        this.targetRows = this.targetRows.map(r =>
-            r.id !== id ? r : { ...r, objectType: val }
+        const value = e.detail.value;
+        this.targetRows = this.targetRows.map(row => {
+            if (row.id === id) {
+                return { 
+                    ...row, 
+                    objectType: value,
+                    showTypeFilter: value === 'Event',
+                    eventType: ''
+                };
+            }
+            return row;
+        });
+    }
+
+    // Handle changes to the event type of a target row
+    handleEventTypeChange(e) {
+        const id = e.target.dataset.id;
+        const value = e.detail.value;
+        this.targetRows = this.targetRows.map(row => 
+            row.id === id ? { ...row, eventType: value } : row
         );
     }
 
@@ -141,9 +169,10 @@ export default class NewKeyResultModal extends LightningElement {
             });
 
             const targetsJson = JSON.stringify(
-                objectTypes.map((ot, i) => ({
-                    objectType: ot,
-                    target: targetValues[i]
+                this.targetRows.map(row => ({
+                    objectType: row.objectType,
+                    target: row.target,
+                    ...(row.objectType == 'Event' ? { eventType: row.eventType || null } : {}),
                 }))
             );
 
@@ -158,6 +187,7 @@ export default class NewKeyResultModal extends LightningElement {
             }));
 
         } catch (err) {
+            console.error('Save error:', JSON.stringify(err), err?.body?.message, err?.message, err);
             this.dispatchEvent(new CustomEvent('error', {
                 detail: {
                     message: err?.body?.message || err?.message || 'Failed to save'

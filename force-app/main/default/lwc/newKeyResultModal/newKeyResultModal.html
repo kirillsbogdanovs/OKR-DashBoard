@@ -58,6 +58,20 @@
                             </lightning-input>
                         </div>
 
+                        <!-- Event Type filter-->
+                         <template if:true={row.showTypeFilter}>
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12">
+                                <lightning-combobox
+                                    label="Event Type"
+                                    value={row.eventType}
+                                    options={activityTypeOptions}
+                                    data-id={row.id}
+                                    onchange={handleEventTypeChange}
+                                    placeholder="All Types">
+                                </lightning-combobox>
+                            </div>
+                         </template>
+
                         <!-- Remove row -->
                         <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-12 slds-m-top_large">
                             <lightning-button-icon
