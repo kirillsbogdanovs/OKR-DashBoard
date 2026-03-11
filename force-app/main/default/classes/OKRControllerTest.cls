@@ -153,29 +153,6 @@ public class OKRControllerTest{
     }
 
     @isTest
-    static void testGetRelatedRecordsCount(){
-        Objective__c obj = [SELECT Id FROM Objective__c WHERE Name = 'Setup Objective' LIMIT 1];
-        Key_Result__c kr = new Key_Result__c(
-            Name = 'Test Key Result for CreateRelatedRecord',
-            Objective__c = obj.Id
-        );
-        insert kr;
-
-        Survey__c survey = new Survey__c(
-            Name = 'Test Survey for Related Records Count',
-            Key_Result__c = kr.Id
-        );
-        insert survey;
-
-        Test.startTest();
-        Map<String, Integer> counts = OKRController.getRelatedRecordsCount(kr.Id);
-        Test.stopTest();
-
-        System.assertNotEquals(null, counts, 'Counts should not be null');
-        System.assertEquals(1, counts.get('Surveys'), 'There should be one related record of type Survey');
-    }
-
-    @isTest
     static void testSaveKeyResultTargets(){
 
         Objective__c obj = [SELECT Id FROM Objective__c WHERE Name = 'Setup Objective' LIMIT 1];
@@ -241,5 +218,70 @@ public class OKRControllerTest{
 
         List<Survey__c> surveys = [SELECT Id FROM Survey__c WHERE Name = 'Test Survey'];
         System.assertEquals(1, surveys.size(), 'One survey should be created');
+    }
+
+    @isTest
+    static void testSendKRData(){
+        User testUser = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId() LIMIT 1];
+        Objective__c obj = [SELECT Id FROM Objective__c WHERE Name = 'Setup Objective' LIMIT 1];
+        
+        Key_Result__c kr = new Key_Result__c(
+            Name = 'Test Key Result for SaveKeyResultTargets',
+            Objective__c = obj.Id,
+            Metric__c = 'Surveys',
+            Target_Value__c = 10
+        );
+        insert kr;
+
+        Lead testLead = new Lead(
+            FirstName = 'Test',
+            LastName = 'Lead',
+            Company = 'Test Company',
+            LeadSource = 'Web'
+        );
+        insert testLead;
+
+        List<Key_Result_Event_Link__c> links = new List<Key_Result_Event_Link__c>{
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = String.valueOf(testLead.Id), Object_Type__c = 'WebLead'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'Opportunity'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'Call'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'Contract'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'Survey'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'Review'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'GoogleReview'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'CaseStudy'),
+            new Key_Result_Event_Link__c(Key_Result__c = kr.Id, RecordId__c = kr.Id, Object_Type__c = 'Event')
+        };
+        insert links;
+
+        List<Key_Result_Target__c> targets = new List<Key_Result_Target__c>{
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'Opportunity', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'Call', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'Contract', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'WebLead', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'Survey', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'Review', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'GoogleReview', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'CaseStudy', Target__c = 5),
+            new Key_Result_Target__c(Key_Result__c = kr.Id, Object_Type__c = 'Event', Target__c = 5)
+        };
+        insert targets;
+
+        Test.startTest();
+        List<OKRController.ObjectiveWithKeyResults> results = OKRController.getObjectivesWithKeyResults(testUser.Id, 2024);
+        Test.stopTest();
+
+        OKRController.KeyResultWrapper krWrapper = results[0].keyResults[0];
+        System.assertEquals(1, krWrapper.opportunityCount);
+        System.assertEquals(1, krWrapper.callCount);
+        System.assertEquals(1, krWrapper.contractCount);
+        System.assertEquals(1, krWrapper.webLeadCount);
+        System.assertEquals(1, krWrapper.surveyCount);
+        System.assertEquals(1, krWrapper.reviewCount);
+        System.assertEquals(1, krWrapper.googleReviewCount);
+        System.assertEquals(1, krWrapper.caseStudyCount);
+        System.assertEquals(1, krWrapper.eventCount);
+        System.assertEquals(5, krWrapper.opportunityTarget);
+        System.assertEquals(5, krWrapper.surveyTarget);
     }
 }

@@ -227,59 +227,6 @@ public class UserOption {
     }
 }
 
-    // Get counts of related records for a Key Result, returns a Map<String, Integer> of counts for different objects.
-    @AuraEnabled(cacheable=true)
-    public static Map<String, Integer> getRelatedRecordsCount(Id keyResultId) {
-        Map<String, Integer> counts = new Map<String, Integer>();
-
-    // Calls (Tasks with Type='Call')
-    counts.put('Calls',
-        [SELECT COUNT() FROM Task WHERE Type = 'Call' AND Key_Result__c = :keyResultId]
-    );
-
-    // Events
-    counts.put('Events',
-        [SELECT COUNT() FROM Event WHERE Key_Result__c = :keyResultId]
-    );
-
-    // Opportunities
-    counts.put('Opportunities',
-        [SELECT COUNT() FROM Opportunity WHERE Key_Result__c = :keyResultId]
-    );
-
-    // Contracts
-    counts.put('Contracts',
-        [SELECT COUNT() FROM Contract WHERE Key_Result__c = :keyResultId]
-    );
-
-    // Web Leads only
-    counts.put('Leads',
-        [SELECT COUNT() FROM Lead WHERE Key_Result__c = :keyResultId AND LeadSource = 'Web']
-    );
-
-    // Case Studies
-    counts.put('CaseStudies',
-        [SELECT COUNT() FROM Case_Study__c WHERE Key_Result__c = :keyResultId]
-    );
-
-    // Surveys
-    counts.put('Surveys',
-        [SELECT COUNT() FROM Survey__c WHERE Key_Result__c = :keyResultId]
-    );
-
-    // Reviews
-    counts.put('Reviews',
-        [SELECT COUNT() FROM Review__c WHERE Key_Result__c = :keyResultId]
-    );
-
-    // Google Reviews
-    counts.put('Google Reviews',
-        [SELECT COUNT() FROM Google_Review__c WHERE Key_Result__c = :keyResultId]
-    );
-
-    return counts;
-    }
-
     // Save Objective with default order handling
     @AuraEnabled
     public static Objective__c saveObjective(Objective__c obj) {
@@ -406,19 +353,6 @@ public class UserOption {
         }
 
     Map<Id, Map<String, Integer>> webLeadCountsByKr = new Map<Id, Map<String, Integer>>();
-
-    // Canonical keys and friendly labels
-    Map<String, String> labelByCanonical = new Map<String, String>{
-        'Opportunity'   => 'Opportunities',
-        'Call'          => 'Calls',
-        'Contract'      => 'Contracts',
-        'WebLead'       => 'WebLeads',
-        'Survey'        => 'Surveys',
-        'Review'        => 'Reviews',
-        'GoogleReview'  => 'GoogleReviews',
-        'CaseStudy'     => 'CaseStudies',
-        'Event'         => 'Events'
-    };
 
     for (Key_Result_Event_Link__c link : allLinks) {
         KeyResultWrapper w = krWrapById.get(link.Key_Result__c);
