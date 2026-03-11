@@ -1,3 +1,18 @@
+# Features
+
+View and manage Objectives and Key Results per user and year
+Create and track targets for multiple object types: Opportunities, Calls, Contracts, Surveys, Reviews, Google Reviews, Case Studies, Events and Web Leads
+Target limit enforcement - warns and blocks record creation when targets are reached
+Event type filtering for Events using Activity Type field
+Dynamic KR progress tracking via junction object Key_Result_Event_Link__c
+Create related records (Surveys, Reviews, Case Studies, Google Reviews) directly from the dashboard and link them to Key Results
+
+# Technology
+
+Salesforce LWC 
+Salesforce CLI
+Apex
+
 # Salesforce DX Project: Next Steps
 
 Now that you’ve created a Salesforce DX project, what’s next? Here are some documentation resources to get you started.
